@@ -7,7 +7,18 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
+# Downloads go through the system `curl` (preinstalled on macOS, Windows 10+ and CI
+# runners) instead of an HTTP client crate with a TLS stack.
 [dependencies]
+# Shares the binary format (encoder and reader) with the app.
+quran-core.workspace = true
+# Reads the Tanzil XML sources; small, no dependencies of its own.
+roxmltree.workspace = true
+serde.workspace = true
+# Verifies the pinned SHA-256 of every source and the canonical text digest.
+sha2.workspace = true
+# Reads data/sources.toml.
+toml.workspace = true
 
 [lints]
 workspace = true

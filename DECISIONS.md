@@ -51,3 +51,32 @@ Format: **context → decision → consequences**.
 ## D-008 · Platforms (open)
 
 macOS only like bible-rs, or Windows/Linux from day one? Tauri allows both; the cost is testing effort. CI currently builds and tests on Linux and macOS.
+
+## D-009 · Tanzil sources: Uthmani XML + metadata 1.0 (2026-10-21)
+
+**Context.** Tanzil offers the Uthmani text as plain text, text with verse numbers, XML and SQL, generated on request by `download.php` with a few options. The plain-text formats prefix the Basmala to verse 1 of every surah except 1 and 9, so showing it on its own line would mean cutting the displayed string. Metadata (surahs, juz, hizb quarters, manzils, rukus, pages, sajdas) is a static file, `quran-data.xml` 1.0.
+
+**Decision.** Pin two files in `data/sources.toml`, each by exact URL and SHA-256:
+
+- `download.php?quranType=uthmani&outType=xml&marks=true&sajdah=true` — Uthmani text with Tanzil's default options (pause marks and sajdah signs on, rub-el-hizb signs off). The XML has the Basmala in its own `bismillah` attribute, so nothing is split or joined; every verse and Basmala is taken byte for byte. The response is generated but deterministic (same SHA-256 on repeated downloads).
+- `res/text/metadata/quran-data.xml`.
+
+The copyright block from the top of the text file is written verbatim to `LICENSES/TANZIL.txt` and embedded in `data/quran.bin` (the terms ask for it in every derived file). Only line endings (CRLF → LF) and the blank lines around the block are normalized.
+
+**Consequences.** The Basmala is not uniform: surahs 95 and 97 spell it with a shadda on the bā' (بِّسْمِ), as in the Madina Mushaf. Checks therefore test its presence, never equality with one fixed string. If Tanzil changes a file, `cargo xtask fetch` fails on the SHA-256; a new pin needs a review of the text diff, not just a new hash.
+
+## D-010 · Binary data format read in place (2026-10-21)
+
+**Context.** Text must be on screen in the first frame, and `unsafe` is forbidden in the workspace, so no transmuting or unchecked UTF-8.
+
+**Decision.** `data/quran.bin` (≈1.3 MB, committed) is a small section table followed by flat sections: verse texts concatenated as UTF-8 with a u32 offset table, surah records, a deduplicated string table, and start lists for juz, hizb quarters and pages. The layout is documented in `crates/quran-core/src/format.rs`. `Quran::from_bytes` validates once (UTF-8, offsets, char boundaries, counts) and then hands out `&str` slices into the original bytes; juz/quarter/page are binary searches over the start lists. `quran-core` embeds the file with `include_bytes!` (via its build script, so the crate still compiles without it and reports `data_loaded: false`). The encoder lives next to the reader so both always agree; `cargo xtask build` only parses the sources and calls it.
+
+`quran_core::TEXT_SHA256` is the SHA-256 of a canonical listing (`surah|ayah|text`, Basmala as ayah 0). `cargo xtask verify` checks it against the Tanzil XML, `cargo test` against the embedded file, and `verify` also rebuilds the file and requires it to match the committed one byte for byte.
+
+**Consequences.** Measured (Criterion, Apple Silicon, release): load and validate 0.8 ms (almost all UTF-8 validation), one surah as owned JSON-ready structs 17 µs for al-Baqarah, `parse_ref` 19 ns. No compression, so the file stays sliceable in place. A format change bumps `format::VERSION`.
+
+## D-011 · Minimal tooling dependencies (2026-10-21)
+
+**Decision.** Runtime `quran-core` keeps only `serde`. `xtask` adds `roxmltree` (XML, no dependencies of its own), `sha2` and `toml` (both already in the tree through Tauri), and downloads with the system `curl` (preinstalled on macOS, Windows 10+ and CI runners) instead of an HTTP client with its own TLS stack. Criterion is a dev-dependency with default features off (no plotting, no rayon).
+
+**Consequences.** `cargo xtask fetch` needs `curl` on `PATH`. CI caches `.cache/` keyed on `data/sources.toml`, so tanzil.net is only hit when a pin changes.

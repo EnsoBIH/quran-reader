@@ -7,6 +7,8 @@ export type AyahNumber = number;
 
 export type Revelation = "meccan" | "medinan";
 
+export type SajdaKind = "recommended" | "obligatory";
+
 export interface VerseRef {
   surah: SurahNumber;
   ayah: AyahNumber;
@@ -28,7 +30,15 @@ export interface Ayah {
   juz: number;
   hizbQuarter: number;
   page: number;
-  sajda?: boolean;
+  sajda?: SajdaKind;
+}
+
+/** Returned by the `surah` Tauri command. */
+export interface SurahText {
+  surah: Surah;
+  /** Basmala shown above verse 1. Absent for surah 1 (it is verse 1 there) and surah 9. */
+  bismillah?: string;
+  ayahs: Ayah[];
 }
 
 export type HighlightColor = 1 | 2 | 3 | 4 | 5 | 6;

@@ -2,7 +2,7 @@
 
 A fast, beautifully typeset Quran reader. Open source (MIT), no accounts, no tracking — all notes stay on your machine.
 
-> Status: **Phase 0 — scaffolding.** The repo builds and runs, but no Quran text is bundled yet. The data pipeline (`xtask`) lands in Phase 1.
+> Status: **Phase 1 — data build.** The Tanzil Uthmani text and metadata are built into `data/quran.bin` from pinned sources; the desktop app shows one surah at a time and `cargo quran read 2:255` prints a verse.
 
 ## Goals
 
@@ -56,7 +56,10 @@ Rust CLI and data build:
 
 ```bash
 cargo quran read 2:255
-cargo xtask --help
+cargo xtask fetch    # download pinned sources into .cache/, check SHA-256
+cargo xtask build    # regenerate data/quran.bin and LICENSES/TANZIL.txt
+cargo xtask verify   # counts, Basmala rules, text digest, byte-for-byte rebuild
+cargo bench -p quran-core
 ```
 
 Release bundle of the desktop app: `pnpm --filter @quran-reader/desktop tauri:build`.

@@ -11,8 +11,17 @@ repository.workspace = true
 name = "quran"
 path = "src/bin/quran.rs"
 
+[[bench]]
+name = "core"
+harness = false
+
 [dependencies]
 serde.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
 
 [lints]
 workspace = true

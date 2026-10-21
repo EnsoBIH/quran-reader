@@ -53,4 +53,20 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
-  # TODO(Phase 1): data job — `cargo xtask verify` (114 surahs, 6,236 verses, SHA-256 of sources).
+  data:
+    name: Data (xtask verify)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.94
+      - uses: Swatinem/rust-cache@v2
+      # Sources are pinned by SHA-256, so a cached copy is as good as a fresh download and
+      # spares tanzil.net. The key changes whenever a pin changes.
+      - uses: actions/cache@v4
+        with:
+          path: .cache
+          key: tanzil-${{ hashFiles('data/sources.toml') }}
+      - run: cargo xtask fetch
+      # 114 surahs, 6,236 verses, Basmala rules, text digest against the source, and a
+      # byte-for-byte rebuild of data/quran.bin from the pinned sources.
+      - run: cargo xtask verify

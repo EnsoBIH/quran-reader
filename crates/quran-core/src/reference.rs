@@ -1,12 +1,12 @@
 //! Reference parser for the ⌘K palette.
 //!
-//! Phase 0 understands numeric references (`2:255`, `2 255`, `2.255`). Surah names,
-//! Arabic input, typos and named verses (`Ayat al-Kursi`) follow once the surah
-//! metadata comes out of the data build. Verse bounds per surah are checked then too.
+//! Understands numeric references (`2:255`, `2 255`, `2.255`) and checks them against the
+//! verse count of each surah. Surah names, Arabic input, typos and named verses
+//! (`Ayat al-Kursi`) follow with the ⌘K palette.
 
 use std::fmt;
 
-use crate::{SURAH_COUNT, VerseRef};
+use crate::{Quran, SURAH_COUNT, VerseRef};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseError {
@@ -14,6 +14,7 @@ pub enum ParseError {
     Invalid(String),
     SurahOutOfRange(u16),
     AyahZero,
+    AyahOutOfRange { surah: u16, ayah: u16, count: u16 },
 }
 
 impl fmt::Display for ParseError {
@@ -23,14 +24,33 @@ impl fmt::Display for ParseError {
             Self::Invalid(s) => write!(f, "not a reference: {s:?}"),
             Self::SurahOutOfRange(n) => write!(f, "surah {n} does not exist (1–{SURAH_COUNT})"),
             Self::AyahZero => write!(f, "verse numbers start at 1"),
+            Self::AyahOutOfRange { surah, ayah, count } => {
+                write!(f, "surah {surah} has {count} verses, not {ayah}")
+            }
         }
     }
 }
 
 impl std::error::Error for ParseError {}
 
-/// Parses `surah:ayah`. A bare surah number (`36`) means its first verse.
+/// Parses `surah:ayah` and checks it against the embedded data. A bare surah number (`36`)
+/// means its first verse. Without embedded data only the surah range is checked.
 pub fn parse_ref(input: &str) -> Result<VerseRef, ParseError> {
+    let r = parse_numeric(input)?;
+    match crate::quran() {
+        Ok(quran) => quran.check(r),
+        Err(_) => Ok(r),
+    }
+}
+
+impl Quran<'_> {
+    /// Like [`parse_ref`], checked against this data.
+    pub fn parse_ref(&self, input: &str) -> Result<VerseRef, ParseError> {
+        self.check(parse_numeric(input)?)
+    }
+}
+
+fn parse_numeric(input: &str) -> Result<VerseRef, ParseError> {
     let input = input.trim();
     if input.is_empty() {
         return Err(ParseError::Empty);
@@ -88,6 +108,29 @@ mod tests {
         assert_eq!(parse_ref("2:0"), Err(ParseError::AyahZero));
         assert!(matches!(parse_ref("2:255:1"), Err(ParseError::Invalid(_))));
         assert!(matches!(parse_ref("baqara"), Err(ParseError::Invalid(_))));
+    }
+
+    #[test]
+    fn checks_verse_bounds() {
+        let quran = crate::quran().expect("data/quran.bin missing — run `cargo xtask build`");
+        assert_eq!(quran.parse_ref("2:286"), Ok(VerseRef::new(2, 286)));
+        assert_eq!(quran.parse_ref("114:6"), Ok(VerseRef::new(114, 6)));
+        assert_eq!(
+            parse_ref("2:287"),
+            Err(ParseError::AyahOutOfRange {
+                surah: 2,
+                ayah: 287,
+                count: 286
+            })
+        );
+        assert_eq!(
+            parse_ref("1 8"),
+            Err(ParseError::AyahOutOfRange {
+                surah: 1,
+                ayah: 8,
+                count: 7
+            })
+        );
     }
 
     #[test]
