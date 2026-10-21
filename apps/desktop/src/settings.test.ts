@@ -1,3 +1,4 @@
+import type { TranslationInfo } from "@quran-reader/types";
 import { describe, expect, it } from "vitest";
 import {
   applySettings,
@@ -6,8 +7,13 @@ import {
   LIMITS,
   loadSettings,
   parseSettings,
+  pickTranslation,
   saveSettings,
 } from "./settings.ts";
+
+function translation(id: string, language: string, bundled = true): TranslationInfo {
+  return { id, language, name: id, translator: "", source: "", license: "", notice: "", bundled };
+}
 
 function memoryStorage() {
   const data = new Map<string, string>();
@@ -87,5 +93,19 @@ describe("settings", () => {
     expect(vars.get("--reader-measure")).toBe("36rem");
     applySettings(DEFAULT_SETTINGS, root as never);
     expect(root.dataset.theme).toBeUndefined();
+  });
+
+  it("keeps the chosen translation id", () => {
+    expect(parseSettings({ translation: "en.pickthall" }).translation).toBe("en.pickthall");
+    expect(parseSettings({ translation: "" }).translation).toBeNull();
+    expect(parseSettings({ translation: 3 }).translation).toBeNull();
+  });
+
+  it("picks the chosen translation, else one in the user's language, else the first", () => {
+    const installed = [translation("en.a", "en"), translation("user.de.b", "de", false)];
+    expect(pickTranslation(installed, "user.de.b")?.id).toBe("user.de.b");
+    expect(pickTranslation(installed, "gone", ["de-AT", "en"])?.id).toBe("user.de.b");
+    expect(pickTranslation(installed, null, ["fr"])?.id).toBe("en.a");
+    expect(pickTranslation([], "en.a")).toBeNull();
   });
 });

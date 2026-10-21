@@ -1,4 +1,4 @@
-import type { ReaderView, Theme } from "@quran-reader/types";
+import type { ReaderView, Theme, TranslationInfo } from "@quran-reader/types";
 
 // Reader settings, kept in localStorage until the SQLite store arrives (Phase 5).
 
@@ -10,6 +10,8 @@ export interface Settings {
   arabicSize: number;
   translationSize: number;
   measure: number;
+  /** Id of the translation shown beside the Arabic; `null` until the user picks one. */
+  translation: string | null;
 }
 
 export const THEMES: Settings["theme"][] = ["system", "light", "sepia", "dark"];
@@ -27,6 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
   arabicSize: 1.875,
   translationSize: 1.0625,
   measure: 42,
+  translation: null,
 };
 
 const KEY = "quran-reader:settings";
@@ -48,6 +51,7 @@ export function parseSettings(raw: unknown): Settings {
     arabicSize: size("arabicSize"),
     translationSize: size("translationSize"),
     measure: size("measure"),
+    translation: typeof o.translation === "string" && o.translation !== "" ? o.translation : null,
   };
 }
 
@@ -81,4 +85,23 @@ export function applySettings(s: Settings, root: HTMLElement) {
   root.style.setProperty("--reader-arabic-size", `${s.arabicSize}rem`);
   root.style.setProperty("--reader-translation-size", `${s.translationSize}rem`);
   root.style.setProperty("--reader-measure", `${s.measure}rem`);
+}
+
+/**
+ * The translation to show: the chosen one if it is installed, otherwise the first in the
+ * user's language (`languages`, e.g. `navigator.languages`), otherwise the first installed.
+ */
+export function pickTranslation(
+  installed: readonly TranslationInfo[],
+  chosen: string | null,
+  languages: readonly string[] = [],
+): TranslationInfo | null {
+  const found = installed.find((t) => t.id === chosen);
+  if (found) return found;
+  for (const tag of languages) {
+    const lang = tag.toLowerCase().split("-")[0];
+    const match = installed.find((t) => t.language === lang);
+    if (match) return match;
+  }
+  return installed[0] ?? null;
 }

@@ -1,4 +1,4 @@
-import type { CoreInfo, Hit, QuranText, SearchResults } from "@quran-reader/types";
+import type { CoreInfo, Hit, QuranText, SearchResults, TranslationInfo } from "@quran-reader/types";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
 // Calls into quran-core. Each returns null when running in a plain browser (`pnpm dev:vite`).
@@ -12,6 +12,30 @@ export async function coreInfo(): Promise<CoreInfo | null> {
 export async function quranText(): Promise<QuranText | null> {
   if (!isTauri()) return null;
   return invoke<QuranText>("quran_text");
+}
+
+/** Installed translations: bundled ones first, then the user's imports. */
+export async function translations(): Promise<TranslationInfo[]> {
+  if (!isTauri()) return [];
+  return invoke<TranslationInfo[]>("translations");
+}
+
+/** All 6,236 verses of a translation, in Quran order. */
+export async function translationText(id: string): Promise<string[]> {
+  return invoke<string[]>("translation_text", { id });
+}
+
+/**
+ * Imports a translation file (Tanzil plain text, `surah|ayah|text` or XML). Rejects with
+ * a readable message when the file does not have every verse exactly once.
+ */
+export async function importTranslation(fileName: string, contents: string) {
+  return invoke<TranslationInfo>("import_translation", { fileName, contents });
+}
+
+/** Deletes an imported translation. */
+export async function removeTranslation(id: string): Promise<void> {
+  return invoke("remove_translation", { id });
 }
 
 /** ⌘K palette matches. Rejects with a readable message (e.g. "surah 2 has 286 verses"). */

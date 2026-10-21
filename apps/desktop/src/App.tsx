@@ -1,13 +1,16 @@
-import type { CoreInfo, Hit, SearchHit, TextRange, VerseRef } from "@quran-reader/types";
+import type { CoreInfo, Hit, SearchHit, TranslationInfo, VerseRef } from "@quran-reader/types";
 import {
   type ReactNode,
   useCallback,
   useEffect,
   useEffectEvent,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
+import { Compare } from "./Compare.tsx";
+import { Credits } from "./Credits.tsx";
 import * as core from "./core.ts";
 import {
   canStep,
@@ -20,30 +23,56 @@ import {
 } from "./history.ts";
 import { buildMushaf, indexOf, type Mushaf, refAt, refOfRow, rowOf } from "./mushaf.ts";
 import { Palette } from "./Palette.tsx";
-import { Reader, type ReaderHandle } from "./Reader.tsx";
+import { Reader, type ReaderHandle, type VerseMarks } from "./Reader.tsx";
 import { SearchPanel } from "./SearchPanel.tsx";
 import { SettingsPanel } from "./SettingsPanel.tsx";
-import { arabicRanges } from "./search.ts";
-import { applySettings, loadSettings, saveSettings } from "./settings.ts";
+import { arabicRanges, textRanges } from "./search.ts";
+import { applySettings, loadSettings, pickTranslation, saveSettings } from "./settings.ts";
+import { useLibrary } from "./translations.ts";
 
 export interface Loaded {
   mushaf: Mushaf | null;
   info: CoreInfo | null;
+  translations: TranslationInfo[];
+  /** The text of the translation shown at start-up, if the view shows one. */
+  texts: Map<string, string[]>;
   error: string | null;
 }
 
-/** Starts loading text, info and the Quran font at once; never rejects. */
+const storage = () => (typeof localStorage === "undefined" ? undefined : localStorage);
+const userLanguages = () => (typeof navigator === "undefined" ? [] : navigator.languages);
+
+/** Starts loading text, info, translations and the Quran font at once; never rejects. */
 export async function load(): Promise<Loaded> {
   try {
     const font = document.fonts.load('1em "Amiri Quran"', "ب").catch(() => []);
-    const [text, info] = await Promise.all([core.quranText(), core.coreInfo(), font]);
-    return { mushaf: text ? buildMushaf(text) : null, info, error: null };
+    const settings = loadSettings(storage());
+    // The translation in view is needed for the first frame; the others load when used.
+    const translations = core.translations().then(async (installed) => {
+      const shown = pickTranslation(installed, settings.translation, userLanguages());
+      const texts = new Map<string, string[]>();
+      if (shown && settings.view !== "arabic") {
+        texts.set(shown.id, await core.translationText(shown.id));
+      }
+      return { installed, texts };
+    });
+    const [text, info, t] = await Promise.all([
+      core.quranText(),
+      core.coreInfo(),
+      translations,
+      font,
+    ]);
+    return {
+      mushaf: text ? buildMushaf(text) : null,
+      info,
+      translations: t.installed,
+      texts: t.texts,
+      error: null,
+    };
   } catch (e) {
-    return { mushaf: null, info: null, error: String(e) };
+    return { mushaf: null, info: null, translations: [], texts: new Map(), error: String(e) };
   }
 }
-
-const storage = () => (typeof localStorage === "undefined" ? undefined : localStorage);
 
 export function App({ loaded }: { loaded: Loaded }) {
   const { mushaf, info, error } = loaded;
@@ -57,7 +86,7 @@ export function App({ loaded }: { loaded: Loaded }) {
       </div>
     );
   }
-  return <ReaderApp mushaf={mushaf} info={info} />;
+  return <ReaderApp mushaf={mushaf} info={info} loaded={loaded} />;
 }
 
 /** The row at the top of the reader, shared without re-rendering the reader itself. */
@@ -79,8 +108,20 @@ function createStore(initial: number) {
 }
 type Store = ReturnType<typeof createStore>;
 
-function ReaderApp({ mushaf, info }: { mushaf: Mushaf; info: CoreInfo | null }) {
+function ReaderApp({
+  mushaf,
+  info,
+  loaded,
+}: {
+  mushaf: Mushaf;
+  info: CoreInfo | null;
+  loaded: Loaded;
+}) {
   const [settings, setSettings] = useState(() => loadSettings(storage()));
+  const library = useLibrary(loaded.translations, loaded.texts);
+  const shown = pickTranslation(library.installed, settings.translation, userLanguages());
+  const shownText = shown ? library.texts.get(shown.id) : undefined;
+  const { ensure } = library;
   const [initialRow] = useState(() =>
     rowOf(mushaf, loadPosition(storage()) ?? { surah: 1, ayah: 1 }),
   );
@@ -91,8 +132,33 @@ function ReaderApp({ mushaf, info }: { mushaf: Mushaf; info: CoreInfo | null }) 
   const [panel, setPanel] = useState(false);
   const [search, setSearch] = useState<{ query: string; focus: number } | null>(null);
   const [lastQuery, setLastQuery] = useState("");
-  const [found, setFound] = useState<{ index: number; ranges: TextRange[] } | null>(null);
+  const [found, setFound] = useState<{ hit: SearchHit } | null>(null);
+  const [compare, setCompare] = useState(false);
+  const [credits, setCredits] = useState(false);
   const reader = useRef<ReaderHandle>(null);
+
+  // Texts load when something shows them: the reader, compare (C) and search (⌘F).
+  const ids = library.installed.map((t) => t.id).join("\n");
+  const all = compare || search !== null;
+  useEffect(() => {
+    if (all) ensure(ids === "" ? [] : ids.split("\n"));
+    else if (shown && settings.view !== "arabic") ensure([shown.id]);
+  }, [all, ids, shown, settings.view, ensure]);
+  // Stable identity: the reader re-estimates every row height when it changes.
+  const shownId = shown?.id;
+  const shownLanguage = shown?.language;
+  const translation = useMemo(
+    () =>
+      shownId && shownLanguage && shownText
+        ? { id: shownId, language: shownLanguage, verses: shownText }
+        : null,
+    [shownId, shownLanguage, shownText],
+  );
+  const marks: VerseMarks | null = found && {
+    index: found.hit.index,
+    arabic: arabicRanges(found.hit),
+    translation: translation ? textRanges(found.hit, translation.id) : [],
+  };
 
   useEffect(() => {
     applySettings(settings, document.documentElement);
@@ -148,7 +214,7 @@ function ReaderApp({ mushaf, info }: { mushaf: Mushaf; info: CoreInfo | null }) 
     reader.current?.focus();
   };
   const onSearchHit = (hit: SearchHit) => {
-    setFound({ index: hit.index, ranges: arabicRanges(hit) });
+    setFound({ hit });
     // Land on the verse itself, not on the surah header above verse 1.
     commit(visit(historyRef.current, current(), hit.ref));
     reader.current?.scrollToRow(mushaf.verseRow[hit.index] ?? 0);
@@ -174,9 +240,16 @@ function ReaderApp({ mushaf, info }: { mushaf: Mushaf; info: CoreInfo | null }) 
       setPanel((p) => !p);
       return;
     }
-    if (palette) return;
+    if (palette || credits) return;
     const t = e.target as HTMLElement | null;
     const typing = t?.closest("input, select, textarea") != null;
+    if (!typing && !mod && !e.altKey && e.key.toLowerCase() === "c") {
+      e.preventDefault();
+      setPanel(false);
+      setCompare((c) => !c);
+      return;
+    }
+    if (compare) return;
     if ((mod && e.key === "[") || (e.altKey && e.key === "ArrowLeft")) {
       e.preventDefault();
       travel(-1);
@@ -222,12 +295,15 @@ function ReaderApp({ mushaf, info }: { mushaf: Mushaf; info: CoreInfo | null }) 
         onSurah={surahStep}
         onPalette={() => setPalette(true)}
         onSearch={openSearch}
+        onCompare={() => setCompare(true)}
         onSettings={() => setPanel((p) => !p)}
         settingsPanel={
           panel && (
             <SettingsPanel
               settings={settings}
               onChange={setSettings}
+              library={library}
+              shown={shown}
               onClose={() => setPanel(false)}
             />
           )
@@ -239,24 +315,53 @@ function ReaderApp({ mushaf, info }: { mushaf: Mushaf; info: CoreInfo | null }) 
           mushaf={mushaf}
           settings={settings}
           initialRow={initialRow}
-          marks={found}
+          translation={settings.view === "arabic" ? null : translation}
+          marks={marks}
           onAnchor={onAnchor}
           onFirstPaint={onFirstPaint}
         />
         {search && (
           <SearchPanel
             mushaf={mushaf}
+            translations={library.installed}
+            texts={library.texts}
             query={search.query}
             onQuery={(query) => setSearch((s) => s && { ...s, query })}
             focusKey={search.focus}
-            active={found?.index ?? null}
+            active={found?.hit.index ?? null}
             onGo={onSearchHit}
             onClose={closeSearch}
           />
         )}
       </div>
-      <Footer info={info} error={null} />
+      <Footer info={info} error={null} onCredits={() => setCredits(true)} />
       {palette && <Palette mushaf={mushaf} onGo={onHit} onClose={() => setPalette(false)} />}
+      {compare && (
+        <Compare
+          mushaf={mushaf}
+          start={current()}
+          translations={library.installed}
+          texts={library.texts}
+          onGo={(to) => {
+            setCompare(false);
+            go(to);
+          }}
+          onClose={() => {
+            setCompare(false);
+            reader.current?.focus();
+          }}
+        />
+      )}
+      {credits && (
+        <Credits
+          info={info}
+          translations={library.installed}
+          onClose={() => {
+            setCredits(false);
+            reader.current?.focus();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -270,6 +375,7 @@ interface TopBarProps {
   onSurah: (direction: -1 | 1) => void;
   onPalette: () => void;
   onSearch: () => void;
+  onCompare: () => void;
   onSettings: () => void;
   settingsPanel: ReactNode;
 }
@@ -287,6 +393,7 @@ function TopBar({
   onSurah,
   onPalette,
   onSearch,
+  onCompare,
   onSettings,
   settingsPanel,
 }: TopBarProps) {
@@ -413,6 +520,14 @@ function TopBar({
         </button>
         <button
           type="button"
+          onClick={onCompare}
+          className={`${select} text-muted hover:text-ink`}
+          title="Compare translations of the current verse (C)"
+        >
+          Compare <kbd className="font-sans">C</kbd>
+        </button>
+        <button
+          type="button"
           onClick={onSettings}
           className={button}
           aria-label="Reader settings"
@@ -426,7 +541,15 @@ function TopBar({
   );
 }
 
-function Footer({ info, error }: { info: CoreInfo | null; error: string | null }) {
+function Footer({
+  info,
+  error,
+  onCredits,
+}: {
+  info: CoreInfo | null;
+  error: string | null;
+  onCredits?: () => void;
+}) {
   return (
     <footer className="flex shrink-0 justify-between gap-4 border-t border-rule px-5 py-2 text-muted text-xs tabular-nums">
       <span>
@@ -436,7 +559,17 @@ function Footer({ info, error }: { info: CoreInfo | null; error: string | null }
             ? `quran-core ${info.version} · ${info.surahCount} surahs · ${info.ayahCount} verses`
             : "browser preview — quran-core not attached"}
       </span>
-      <span>Quran text: Tanzil.net (CC BY 3.0) · tanzil.net</span>
+      <span>
+        Quran text: Tanzil.net (CC BY 3.0) · tanzil.net
+        {onCredits && (
+          <>
+            {" · "}
+            <button type="button" onClick={onCredits} className="hover:text-ink">
+              Credits
+            </button>
+          </>
+        )}
+      </span>
     </footer>
   );
 }

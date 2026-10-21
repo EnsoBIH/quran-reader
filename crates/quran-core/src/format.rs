@@ -71,12 +71,7 @@ impl fmt::Display for FormatError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BadMagic => write!(f, "not a quran-reader data file"),
-            Self::UnsupportedVersion(v) => {
-                write!(
-                    f,
-                    "data format version {v} is not supported (expected {VERSION})"
-                )
-            }
+            Self::UnsupportedVersion(v) => write!(f, "data format version {v} is not supported"),
             Self::MissingSection(tag) => write!(f, "data file has no {tag} section"),
             Self::Malformed(what) => write!(f, "malformed data file: {what}"),
         }
@@ -159,7 +154,7 @@ impl<'a> Quran<'a> {
     /// Validates `bytes` and returns a view into them. Runs in O(file size) once (UTF-8 and
     /// offset checks); every later lookup is O(1) or O(log n) and cannot panic.
     pub fn from_bytes(bytes: &'a [u8]) -> Result<Self, FormatError> {
-        let sections = Sections::parse(bytes)?;
+        let sections = Sections::parse(bytes, MAGIC, VERSION)?;
         let notice = utf8(sections.get(NOTICE, "NOTE")?, "notice is not UTF-8")?;
         let sources = sections.get(SOURCES, "SRCS")?;
         let string_offsets = sections.get(STRING_OFFSETS, "STRO")?;
@@ -611,24 +606,34 @@ pub fn encode(src: &Source<'_>) -> Result<Vec<u8>, EncodeError> {
         (SAJDAS, sajdas),
     ];
 
+    let out = write_sections(MAGIC, VERSION, &sections)?;
+    Quran::from_bytes(&out).map_err(EncodeError::Invalid)?;
+    Ok(out)
+}
+
+/// Header, section table and 4-byte aligned sections. Shared with the translation files
+/// (`translation.rs`), which use the same container with their own magic and sections.
+pub(crate) fn write_sections(
+    magic: [u8; 8],
+    version: u32,
+    sections: &[([u8; 4], Vec<u8>)],
+) -> Result<Vec<u8>, EncodeError> {
     let mut out = Vec::new();
-    out.extend_from_slice(&MAGIC);
-    put_u32(&mut out, VERSION);
+    out.extend_from_slice(&magic);
+    put_u32(&mut out, version);
     put_u32(&mut out, sections.len() as u32);
     let mut position = HEADER_LEN + sections.len() * TABLE_ENTRY_LEN;
-    for (tag, body) in &sections {
+    for (tag, body) in sections {
         position = position.next_multiple_of(4);
         out.extend_from_slice(tag);
         put_u32(&mut out, offset(position)?);
         put_u32(&mut out, offset(body.len())?);
         position += body.len();
     }
-    for (_, body) in &sections {
+    for (_, body) in sections {
         out.resize(out.len().next_multiple_of(4), 0);
         out.extend_from_slice(body);
     }
-
-    Quran::from_bytes(&out).map_err(EncodeError::Invalid)?;
     Ok(out)
 }
 
@@ -664,18 +669,22 @@ impl StringTable {
     }
 }
 
-struct Sections<'a> {
+pub(crate) struct Sections<'a> {
     bytes: &'a [u8],
     table: &'a [u8],
 }
 
 impl<'a> Sections<'a> {
-    fn parse(bytes: &'a [u8]) -> Result<Self, FormatError> {
-        if bytes.len() < HEADER_LEN || bytes[..8] != MAGIC {
+    pub(crate) fn parse(
+        bytes: &'a [u8],
+        magic: [u8; 8],
+        expected: u32,
+    ) -> Result<Self, FormatError> {
+        if bytes.len() < HEADER_LEN || bytes[..8] != magic {
             return Err(FormatError::BadMagic);
         }
         let version = read_u32(&bytes[8..12], 0);
-        if version != VERSION {
+        if version != expected {
             return Err(FormatError::UnsupportedVersion(version));
         }
         let count = read_u32(&bytes[12..16], 0) as usize;
@@ -686,7 +695,7 @@ impl<'a> Sections<'a> {
         Ok(Self { bytes, table })
     }
 
-    fn get(&self, tag: [u8; 4], name: &'static str) -> Result<&'a [u8], FormatError> {
+    pub(crate) fn get(&self, tag: [u8; 4], name: &'static str) -> Result<&'a [u8], FormatError> {
         let entry = self
             .table
             .chunks_exact(TABLE_ENTRY_LEN)
@@ -701,13 +710,17 @@ impl<'a> Sections<'a> {
     }
 }
 
-fn utf8<'a>(bytes: &'a [u8], what: &'static str) -> Result<&'a str, FormatError> {
+pub(crate) fn utf8<'a>(bytes: &'a [u8], what: &'static str) -> Result<&'a str, FormatError> {
     std::str::from_utf8(bytes).map_err(|_| FormatError::Malformed(what))
 }
 
 /// `offsets` must be u32 × (n + 1), non-decreasing, starting at 0, ending at `text.len()`,
 /// and every offset a char boundary — then slicing `text` with them never panics.
-fn validate_offsets(offsets: &[u8], text: &str, what: &'static str) -> Result<(), FormatError> {
+pub(crate) fn validate_offsets(
+    offsets: &[u8],
+    text: &str,
+    what: &'static str,
+) -> Result<(), FormatError> {
     let n = offsets.len() / 4;
     let ok = offsets.len().is_multiple_of(4)
         && n >= 1
@@ -764,7 +777,7 @@ fn read_u16(bytes: &[u8], i: usize) -> u16 {
     u16::from_le_bytes([bytes[2 * i], bytes[2 * i + 1]])
 }
 
-fn read_u32(bytes: &[u8], i: usize) -> u32 {
+pub(crate) fn read_u32(bytes: &[u8], i: usize) -> u32 {
     let b = &bytes[4 * i..4 * i + 4];
     u32::from_le_bytes([b[0], b[1], b[2], b[3]])
 }
@@ -773,10 +786,10 @@ fn put_u16(out: &mut Vec<u8>, v: u16) {
     out.extend_from_slice(&v.to_le_bytes());
 }
 
-fn put_u32(out: &mut Vec<u8>, v: u32) {
+pub(crate) fn put_u32(out: &mut Vec<u8>, v: u32) {
     out.extend_from_slice(&v.to_le_bytes());
 }
 
-fn offset(n: usize) -> Result<u32, EncodeError> {
+pub(crate) fn offset(n: usize) -> Result<u32, EncodeError> {
     u32::try_from(n).map_err(|_| EncodeError::TooLarge("data file"))
 }

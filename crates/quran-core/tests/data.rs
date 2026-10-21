@@ -7,6 +7,13 @@ use sha2::{Digest, Sha256};
 
 const AYAT_AL_KURSI_SHA256: &str =
     "b036974542211b4c684147cc80b1943b932229e7d59d8e872035144f4aaaef9c";
+// SHA-256 of three Pickthall verses, checked by hand against the source when pinned.
+const PICKTHALL_1_1_SHA256: &str =
+    "3378da21fe4d9f255e0336c517936ef15453fb07d4cf1d5842eaff0eaa30da0e";
+const PICKTHALL_2_255_SHA256: &str =
+    "f174338173480fd74890bc2dcc0d605c6f418a9923abb17d4e76bee129a5cd64";
+const PICKTHALL_114_6_SHA256: &str =
+    "d441541ba23bed57d8679fb1d70dcbe7625584f06e7d365b52e31c2ced70c70d";
 
 fn quran() -> &'static Quran<'static> {
     quran_core::quran().expect("data/quran.bin missing — run `cargo xtask build`")
@@ -248,4 +255,43 @@ fn whole_text_for_the_reader() {
     assert!(json["surahs"][1]["bismillah"].is_string());
     assert_eq!(json["pageStarts"][603], 6221);
     assert_eq!(json["sajdas"][0]["kind"], "recommended");
+}
+
+#[test]
+fn bundled_translations_have_every_verse_and_a_pinned_source() {
+    let pins = include_str!("../../../data/sources.toml");
+    let translations = quran_core::bundled_translations().expect("bundled translations load");
+    assert!(!translations.is_empty(), "data/translations/ is empty");
+    for t in translations {
+        let info = t.info(true);
+        assert_eq!(t.verses().len(), usize::from(AYAH_COUNT), "{}", info.id);
+        assert!(t.verses().all(|v| !v.trim().is_empty()), "{}", info.id);
+        assert!(
+            !info.notice.is_empty() && !info.license.is_empty(),
+            "{}",
+            info.id
+        );
+        let line = format!("sha256 = \"{}\"", hex(t.source_sha256()));
+        assert!(pins.contains(&line), "{}: {line} not pinned", info.id);
+    }
+}
+
+#[test]
+fn pickthall_is_aligned_to_the_verses() {
+    // Digests, not text: no translation text in hand-written tests.
+    let t = quran_core::bundled_translations()
+        .unwrap()
+        .iter()
+        .find(|t| t.id() == "en.pickthall")
+        .expect("Pickthall is bundled");
+    let q = quran();
+    let digest = |r: VerseRef| {
+        let verse = t.verse(q.global_index(r).unwrap()).unwrap();
+        hex(&Sha256::digest(verse.as_bytes()))
+    };
+    // 1:1 is the Basmala, as in the Arabic; 2:255 is Ayat al-Kursi; 114:6 the last verse.
+    assert_eq!(digest(VerseRef::new(1, 1)), PICKTHALL_1_1_SHA256);
+    assert_eq!(digest(VerseRef::new(2, 255)), PICKTHALL_2_255_SHA256);
+    assert_eq!(digest(VerseRef::new(114, 6)), PICKTHALL_114_6_SHA256);
+    assert_eq!(t.verses().filter(|v| v.contains('\n')).count(), 0);
 }

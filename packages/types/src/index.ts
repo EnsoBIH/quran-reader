@@ -97,7 +97,7 @@ export interface TextRange {
 
 /** Matched ranges in one searchable text of a verse. */
 export interface TextMatches {
-  /** `"quran"` for the Arabic; translation ids later. */
+  /** `"quran"` for the Arabic, otherwise a translation id. */
   text: string;
   /** Sorted, non-overlapping. */
   ranges: TextRange[];
@@ -117,6 +117,24 @@ export interface SearchResults {
   total: number;
   /** Matching verses in Quran order, at most the limit. */
   hits: SearchHit[];
+}
+
+/** An installed translation, returned by the `translations` Tauri command. */
+export interface TranslationInfo {
+  /** Unique among installed translations; imports start with `user.`. */
+  id: string;
+  /** BCP 47 language tag such as `de` or `en`; `und` when unknown. */
+  language: string;
+  name: string;
+  translator: string;
+  /** A URL for bundled translations, the file name for imports. */
+  source: string;
+  /** Legal status in one line. */
+  license: string;
+  /** Provenance, terms and attribution, shown on the credits page. */
+  notice: string;
+  /** Shipped with the app; false for the user's own imports. */
+  bundled: boolean;
 }
 
 /** Arabic only, Arabic with the translation below, or both side by side. */

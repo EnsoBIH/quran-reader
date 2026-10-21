@@ -1,0 +1,25 @@
+English translation: Marmaduke Pickthall, "The Meaning of the Glorious Koran"
+
+Translator: Muhammad Marmaduke Pickthall (born 7 April 1875, London; died 19 May 1936,
+St Ives). First published 1930 (London: Alfred A. Knopf / George Allen & Unwin; New York:
+Alfred A. Knopf).
+
+Status: public domain.
+- Germany and the EU: the term ended 70 years after the translator's death, on 31 December
+  2006 (Section 64 UrhG, Directive 2006/116/EC).
+- United States: published in 1930; works of 1930 entered the public domain on 1 January 2026
+  (95 years from publication).
+
+Digital text: the verses marked "P:" in the e-text "Three translations of the Koran
+(Al-Qur'an) side by side", eBook #16955 of gutenberg.org (released 27 October 2005, updated
+12 December 2020), file https://www.gutenberg.org/cache/epub/16955/pg16955.txt, pinned by
+SHA-256 in data/sources.toml. Only Pickthall's verses are used; the two other translations in
+that file are not. The verses are taken as they are, divided by the standard (Kufan) count of
+6,236 verses; only the line breaks within a verse are joined with a space.
+
+This digital text is not a verbatim copy of the 1930 print. Its origin is unknown ("a file
+whose origins we don't know", re-proofed against paper copies). Compared with the 1930 print,
+"God" is replaced by "Allah" in some verses (e.g. 2:163), "Owner" by "Master" in 1:4, some
+punctuation differs, and the verse division follows the standard count instead of the 1930
+numbering. Such mechanical changes carry no copyright of their own, so the text is public
+domain like the original.

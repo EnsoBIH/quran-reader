@@ -1,9 +1,11 @@
 //! `cargo xtask` — reproducible data build.
 //!
 //! 1. `fetch`  — download every source in `data/sources.toml` into `.cache/`, verify SHA-256.
-//! 2. `build`  — generate `data/quran.bin` and `LICENSES/TANZIL.txt` from the cached sources.
+//! 2. `build`  — generate `data/quran.bin`, `LICENSES/TANZIL.txt` and the bundled
+//!    translations in `data/translations/` from the cached sources.
 //! 3. `verify` — check `data/quran.bin` against the sources: counts, Basmala rules, text
-//!    digest, notice, and that a fresh build reproduces the committed file byte for byte.
+//!    digest, notice, and that a fresh build reproduces the committed file byte for byte;
+//!    the same for every bundled translation (verses per surah, notice, source pin).
 
 use std::fmt::Write as _;
 use std::fs;
@@ -11,6 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 use quran_core::format::{self, Source, SurahSource};
+use quran_core::translation::{self, Translation, TranslationInfo};
 use quran_core::{AYAH_COUNT, Quran, Revelation, SURAH_COUNT, SajdaKind, VerseRef};
 use roxmltree::{Document, Node};
 use serde::Deserialize;
@@ -28,6 +31,38 @@ const TEXT_ID: &str = "tanzil-uthmani";
 const METADATA_ID: &str = "tanzil-metadata";
 const DATA_FILE: &str = "data/quran.bin";
 const NOTICE_FILE: &str = "LICENSES/TANZIL.txt";
+
+/// Translations shipped with the app (DECISIONS.md D-017, D-018). Each is built from one
+/// pinned source and carries a hand-written notice from `LICENSES/`, embedded verbatim.
+struct Bundled {
+    /// Source id in `data/sources.toml`.
+    source: &'static str,
+    /// Output file, relative to the repository root.
+    file: &'static str,
+    notice: &'static str,
+    id: &'static str,
+    language: &'static str,
+    name: &'static str,
+    translator: &'static str,
+    /// Where the text comes from, shown in the app.
+    origin: &'static str,
+    license: &'static str,
+    /// The verses of each surah, in order, exactly as in the source.
+    parse: fn(&str) -> Result<Vec<Vec<String>>>,
+}
+
+const BUNDLED: &[Bundled] = &[Bundled {
+    source: "gutenberg-16955",
+    file: "data/translations/en.pickthall.bin",
+    notice: "LICENSES/PICKTHALL.txt",
+    id: "en.pickthall",
+    language: "en",
+    name: "Pickthall (1930)",
+    translator: "Marmaduke Pickthall",
+    origin: "gutenberg.org eBook #16955 (verses marked P:)",
+    license: "Public domain",
+    parse: parse_gutenberg_pickthall,
+}];
 
 const JUZ_COUNT: u8 = 30;
 const HIZB_QUARTER_COUNT: u8 = 240;
@@ -258,7 +293,139 @@ fn build() -> Result<()> {
         sha256_hex(&bytes)
     );
     println!("wrote {NOTICE_FILE}");
+
+    let counts = surah_counts(&sources)?;
+    fs::create_dir_all(root().join("data/translations"))
+        .map_err(|e| format!("data/translations: {e}"))?;
+    for t in BUNDLED {
+        let bytes = encode_translation(t, &counts)?;
+        write(t.file, &bytes)?;
+        println!(
+            "wrote {} ({} bytes, SHA-256 {})",
+            t.file,
+            bytes.len(),
+            sha256_hex(&bytes)
+        );
+    }
     Ok(())
+}
+
+/// Verses per surah, from the pinned Tanzil metadata.
+fn surah_counts(sources: &Sources) -> Result<Vec<usize>> {
+    let metadata = Document::parse(&sources.metadata).map_err(|e| format!("{METADATA_ID}: {e}"))?;
+    elements(&metadata, "sura")?
+        .iter()
+        .map(|s| parse_attr(s, "ayas"))
+        .collect()
+}
+
+/// Parses a bundled translation from its pinned source, checks it verse by verse against
+/// the surah lengths, and encodes it with its notice.
+fn encode_translation(t: &Bundled, counts: &[usize]) -> Result<Vec<u8>> {
+    let manifest = manifest()?;
+    let entry = source(&manifest, t.source)?;
+    let bytes = entry.read_cached()?;
+    let digest: [u8; 32] = Sha256::digest(&bytes).into();
+    let text = String::from_utf8(bytes).map_err(|_| format!("{}: not UTF-8", t.source))?;
+    let surahs = (t.parse)(&text).map_err(|e| format!("{}: {e}", t.source))?;
+    if surahs.len() != counts.len() {
+        return Err(format!(
+            "{}: {} surahs, expected {}",
+            t.source,
+            surahs.len(),
+            counts.len()
+        ));
+    }
+    for (number, (verses, &expected)) in (1..).zip(surahs.iter().zip(counts)) {
+        if verses.len() != expected {
+            return Err(format!(
+                "{}: surah {number} has {} verses, expected {expected}",
+                t.source,
+                verses.len()
+            ));
+        }
+        if let Some(a) = verses.iter().position(|v| v.trim().is_empty()) {
+            return Err(format!("{}: verse {number}:{} is empty", t.source, a + 1));
+        }
+    }
+    let verses: Vec<String> = surahs.into_iter().flatten().collect();
+    let notice_path = root().join(t.notice);
+    let notice = fs::read_to_string(&notice_path).map_err(|e| format!("{}: {e}", t.notice))?;
+    let info = TranslationInfo {
+        id: t.id.to_owned(),
+        language: t.language.to_owned(),
+        name: t.name.to_owned(),
+        translator: t.translator.to_owned(),
+        source: t.origin.to_owned(),
+        license: t.license.to_owned(),
+        notice: notice.trim_end().to_owned(),
+        bundled: true,
+    };
+    translation::encode(&info, digest, &verses).map_err(|e| format!("{}: {e}", t.file))
+}
+
+/// Pickthall's verses from the Project Gutenberg e-text #16955, which gives three
+/// translations side by side: per surah a ` Chapter N:` heading with ` Total Verses: N`,
+/// then per verse a number line and `Y:`, `P:` and `S:` paragraphs separated by blank lines.
+/// Only the `P:` paragraphs are taken; their line breaks are joined with a space and the
+/// text is otherwise unchanged. Everything before the first heading (licence, the legend
+/// `P: = Qur'an Translation by …`) and after the end marker is skipped.
+fn parse_gutenberg_pickthall(text: &str) -> Result<Vec<Vec<String>>> {
+    let mut surahs: Vec<Vec<String>> = Vec::new();
+    let mut declared: Vec<usize> = Vec::new();
+    let mut lines = text.lines().enumerate().peekable();
+    while let Some((i, line)) = lines.next() {
+        if line.starts_with("*** END OF THE PROJECT GUTENBERG") {
+            break;
+        }
+        if let Some(number) = line
+            .trim()
+            .strip_prefix("Chapter ")
+            .and_then(|s| s.strip_suffix(':'))
+        {
+            let n: usize = number
+                .parse()
+                .map_err(|_| format!("line {}: bad chapter heading", i + 1))?;
+            if n != surahs.len() + 1 {
+                return Err(format!("line {}: chapter {n} out of order", i + 1));
+            }
+            surahs.push(Vec::new());
+            continue;
+        }
+        if let Some(rest) = line.trim().strip_prefix("Total Verses:") {
+            let n = rest
+                .split_whitespace()
+                .next()
+                .and_then(|n| n.parse().ok())
+                .ok_or_else(|| format!("line {}: bad verse total", i + 1))?;
+            declared.push(n);
+            continue;
+        }
+        let Some(first) = line.strip_prefix("P: ") else {
+            continue;
+        };
+        let Some(verses) = surahs.last_mut() else {
+            continue; // the legend above chapter 1
+        };
+        let mut verse = first.to_owned();
+        while let Some((_, next)) = lines.next_if(|(_, l)| !l.trim().is_empty()) {
+            verse.push(' ');
+            verse.push_str(next);
+        }
+        verses.push(verse);
+    }
+    if declared.len() != surahs.len() {
+        return Err("every chapter needs a `Total Verses:` line".into());
+    }
+    for (n, (verses, total)) in (1..).zip(surahs.iter().zip(&declared)) {
+        if verses.len() != *total {
+            return Err(format!(
+                "chapter {n}: {} P: verses, but the heading says {total}",
+                verses.len()
+            ));
+        }
+    }
+    Ok(surahs)
 }
 
 /// The Tanzil copyright block from the comment at the top of the text file, verbatim
@@ -436,7 +603,72 @@ fn verify() -> Result<()> {
         ));
     }
     println!("{DATA_FILE}: matches the pinned sources byte for byte");
+
+    let counts = surah_counts(&sources)?;
+    verify_translations(&manifest, &quran, &counts)?;
     println!("verify ok");
+    Ok(())
+}
+
+/// Every bundled translation: present, valid, 6,236 non-empty verses, built from its pin with
+/// its current notice — and nothing in `data/translations/` that is not listed in `BUNDLED`.
+fn verify_translations(manifest: &Manifest, quran: &Quran<'_>, counts: &[usize]) -> Result<()> {
+    let dir = root().join("data/translations");
+    let mut files: Vec<String> = fs::read_dir(&dir)
+        .map_err(|e| format!("data/translations: {e}"))?
+        .filter_map(|e| {
+            Some(format!(
+                "data/translations/{}",
+                e.ok()?.file_name().to_str()?
+            ))
+        })
+        .collect();
+    files.sort();
+    let mut listed: Vec<String> = BUNDLED.iter().map(|t| t.file.to_owned()).collect();
+    listed.sort();
+    if files != listed {
+        return Err(format!(
+            "data/translations/ holds {files:?}, but xtask bundles {listed:?}; every bundled \
+             translation needs a review in LICENSES/README.md and an entry in BUNDLED"
+        ));
+    }
+    for t in BUNDLED {
+        let committed = fs::read(root().join(t.file)).map_err(|e| format!("{}: {e}", t.file))?;
+        let parsed = Translation::from_bytes(&committed).map_err(|e| format!("{}: {e}", t.file))?;
+        if parsed.id() != t.id {
+            return Err(format!(
+                "{}: id {:?}, expected {:?}",
+                t.file,
+                parsed.id(),
+                t.id
+            ));
+        }
+        expect_digest(
+            &format!("{} source pinned in file", t.id),
+            parsed.source_sha256(),
+            &source(manifest, t.source)?.sha256,
+        )?;
+        let empty = parsed.verses().position(|v| v.trim().is_empty());
+        if let Some(i) = empty {
+            let r = quran.verse_ref_at(i as u16).unwrap_or(VerseRef::new(0, 0));
+            return Err(format!("{}: verse {r} is empty", t.file));
+        }
+        let rebuilt = encode_translation(t, counts)?;
+        if rebuilt != committed {
+            return Err(format!(
+                "{} is not what `cargo xtask build` produces from the pinned source and {} \
+                 (committed {}, rebuilt {})",
+                t.file,
+                t.notice,
+                sha256_hex(&committed),
+                sha256_hex(&rebuilt)
+            ));
+        }
+        println!(
+            "{}: {AYAH_COUNT} verses, matches the pinned source byte for byte",
+            t.file
+        );
+    }
     Ok(())
 }
 

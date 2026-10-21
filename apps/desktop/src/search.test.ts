@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arabicRanges, snippet } from "./search.ts";
+import { arabicRanges, snippet, textRanges } from "./search.ts";
 
 // Synthetic text only: "w00 w01 … w59", every word three letters and a space.
 const text = Array.from({ length: 60 }, (_, i) => `w${String(i).padStart(2, "0")}`).join(" ");
@@ -51,5 +51,21 @@ describe("arabicRanges", () => {
     };
     expect(arabicRanges(hit)).toEqual([{ start: 2, end: 3 }]);
     expect(arabicRanges({ ...hit, matches: [] })).toEqual([]);
+  });
+});
+
+describe("textRanges", () => {
+  it("picks the ranges of one text of a hit", () => {
+    const hit = {
+      ref: { surah: 1, ayah: 1 },
+      index: 0,
+      matches: [
+        { text: "quran", ranges: [{ start: 0, end: 3 }] },
+        { text: "en.synthetic", ranges: [{ start: 4, end: 9 }] },
+      ],
+    };
+    expect(arabicRanges(hit)).toEqual([{ start: 0, end: 3 }]);
+    expect(textRanges(hit, "en.synthetic")).toEqual([{ start: 4, end: 9 }]);
+    expect(textRanges(hit, "missing")).toEqual([]);
   });
 });

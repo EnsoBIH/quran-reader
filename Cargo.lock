@@ -2528,6 +2528,7 @@ dependencies = [
  "quran-core",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
 ]

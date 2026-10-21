@@ -142,3 +142,39 @@ Stored in the file, the normalized text would add ≈ 750 KB (+55 %) to `data/qu
 - Results are in Quran order with the total count; the app asks for 100 at a time.
 
 **Consequences.** No ranking yet: in Quran order, results are predictable and the first hit of a common word is the first place it occurs. The ⌘F panel highlights matches with a background colour only, so the text keeps its colour and shaping.
+
+## D-017 · Bundled translations: Pickthall (1930) only, German by import (2026-10-21)
+
+**Context.** Phase 4 bundles translations only if they are clean (D-004): public domain in Germany/EU and in the US, taken from a digital source whose own terms allow redistribution by anyone (the code is MIT, so also commercial use), and aligned to the 6,236 verses. Tanzil's translations are "for non-commercial purposes only". The review per edition, country and source is in `LICENSES/README.md` ("Translation review").
+
+**Decision.**
+
+- **English: Pickthall, *The Meaning of the Glorious Koran* (1930)**, public domain in the EU since 2007 (Pickthall † 1936) and in the US since 2026-01-01 (published 1930). Text: the `P:` verses of gutenberg.org eBook #16955, which follows the Kufan count. PG's licence binds only its trademark; the bundled file contains the verses alone. The text is *not* the verbatim 1930 print (some "God" → "Allah", 1:4 "Master" for "Owner", punctuation, standard verse division) and its origin is unknown; these mechanical changes carry no copyright of their own. It is labelled as this digital text, never as the 1930 print. Rejected: Tanzil `en.pickthall` and its copies (non-commercial terms, 35 corrupted "no Allah save Him" verses), quran.com (no redistribution).
+- **German: none.** Henning (1901, † 1927), Goldschmidt (1916, † 1950), Ullmann (1840) and Grigull (1901) are public domain, but no clean, verse-aligned digital text exists: projekt-gutenberg.org has the copyrighted Rudolph revision of Henning under private-use-only terms, the rest are Fraktur scans without (or with Flügel) verse numbers. German readers import a translation they downloaded (D-019).
+- The user approved this choice on 2026-10-21 before anything was bundled.
+
+**Consequences.** A German public-domain text would have to be produced: OCR of the 1901 Henning print, proofreading, and re-cutting Flügel's verses at Kufan boundaries — a project of its own, which would publish the result with its own provenance. If gutenberg.org changes the file, `cargo xtask fetch` fails on the SHA-256 and the new text needs a review like the first.
+
+## D-018 · Translations in their own files, not in `data/quran.bin` (2026-10-21)
+
+**Context.** Translations could be further sections of `data/quran.bin` or separate files.
+
+**Decision.** One file per translation, `data/translations/<id>.bin`, in the container of `quran.bin` (header, section table, 4-byte aligned sections; `format::write_sections`) with its own magic `QURANTRN`: the description (id, language, name, translator, source, licence, notice), the SHA-256 of its source, verse offsets and the verses (`crates/quran-core/src/translation.rs`). `quran-core`'s build script embeds every file in `data/translations/`; `Translation::from_bytes` validates once and reads in place like `Quran`. `cargo xtask build` writes them, `verify` rebuilds each from its pin and notice and requires the same bytes, and refuses files that are not in its list.
+
+Why separate:
+
+- `quran.bin`, its text digest and the Tanzil notice stay exactly as they are; adding or dropping a translation never touches the Arabic file.
+- Each translation carries its own licence notice and source pin, so its terms travel with it.
+- User imports (D-019) are written in the same format, so the app reads bundled and imported translations with one code path.
+- Start-up stays lean: the app sends a translation to the webview only when the view shows one (≈ 0.9 MB JSON for Pickthall), not with the Arabic.
+
+**Consequences.** Embedded size +0.85 MB for Pickthall. The app's search index holds the Arabic and every installed translation (`SearchIndex::add_text`, `add_owned_text` for imports); building it takes ≈ 6.8 ms with Pickthall, on a background thread at start-up. Measured (Criterion, Apple Silicon): `mercy` 0.40 ms, `"lord of the worlds"` 0.27 ms, `the` 0.45 ms, `allah -merciful` 0.58 ms, `الله` 0.53 ms — well under 5 ms.
+
+## D-019 · User import of other translations (2026-10-21)
+
+**Context.** Most translations (Tanzil's included) may not be redistributed, but users may download them for their own use.
+
+**Decision.** Settings → Translation → Import… reads a file the user picked (plain text, `surah|ayah|text` or XML, Tanzil's formats; `docs/translation-import.md`). `quran_core::import::parse` requires every one of the 6,236 verses exactly once and refuses the file otherwise with the offending line, so a translation is never shown next to the wrong verse. Verse texts are kept as in the file; the comments (Tanzil's notice) are kept as the notice, `Name:`, `Translator:`, `ID:` and `Language:` lines fill in the description. The app stores the import as a translation file (D-018) under `<app data>/translations/user.<id>.bin`, never uploads or bundles it, and lists it as "imported" in settings, compare and credits. The file is read in the webview (`<input type="file">`) and sent to Rust as text, so no dialog plugin is needed. Settings keep the chosen translation's id (D-014); without a choice the app picks one in the system language, else the first installed.
+
+**Consequences.** Imports use the same search and display paths as bundled translations. An import that no longer loads (damaged, or a future incompatible format) is skipped at start-up with a message on stderr.
+

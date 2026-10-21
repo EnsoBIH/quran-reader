@@ -130,6 +130,35 @@ fn search(c: &mut Criterion) {
             b.iter(|| index.search(black_box(query), 100))
         });
     }
+
+    // The Arabic and every bundled translation, as the app searches them (D-017): each query
+    // scans every text. "the" matches almost every verse of an English translation.
+    let translations = quran_core::bundled_translations().expect("bundled translations");
+    let build = || {
+        let mut index = SearchIndex::new(quran);
+        for t in translations {
+            index
+                .add_text(t.id(), t.verses().collect())
+                .expect("one string per verse");
+        }
+        index
+    };
+    c.bench_function("search index with bundled translations (build)", |b| {
+        b.iter(build)
+    });
+    let index = build();
+    for query in [
+        "mercy",
+        "\"lord of the worlds\"",
+        "allah -merciful",
+        "the",
+        "الله",
+        "zzz",
+    ] {
+        c.bench_function(&format!("search({query:?}, 100) with translations"), |b| {
+            b.iter(|| index.search(black_box(query), 100))
+        });
+    }
 }
 
 criterion_group!(benches, load, parse, text, search);

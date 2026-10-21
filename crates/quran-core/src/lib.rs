@@ -7,11 +7,13 @@ use std::fmt;
 use std::sync::OnceLock;
 
 pub mod format;
+pub mod import;
 pub mod model;
 mod names;
 mod normalize;
 pub mod reference;
 pub mod search;
+pub mod translation;
 
 pub use format::{AyahMeta, FormatError, Quran, SurahMeta};
 pub use model::{
@@ -20,6 +22,7 @@ pub use model::{
 };
 pub use reference::{ParseError, parse_ref};
 pub use search::{QURAN_TEXT, SearchError, SearchIndex};
+pub use translation::{Translation, TranslationInfo};
 
 /// Number of surahs in the Quran.
 pub const SURAH_COUNT: u16 = 114;
@@ -36,6 +39,9 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// `data/quran.bin` as of compile time, or empty if it had not been built yet.
 static EMBEDDED: &[u8] = include_bytes!(env!("QURAN_DATA_PATH"));
+
+/// Bundled translation files from `data/translations/`, in file name order.
+static BUNDLED_TRANSLATIONS: &[&[u8]] = include!(concat!(env!("OUT_DIR"), "/translations.rs"));
 
 /// Why the embedded data is unavailable.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,12 +77,35 @@ pub fn quran() -> Result<&'static Quran<'static>, DataError> {
         .map_err(Clone::clone)
 }
 
-/// The search index of the embedded text, built on first use (a few milliseconds; see
+/// The translations shipped with the app, validated on first use (DECISIONS.md D-018).
+pub fn bundled_translations() -> Result<&'static [Translation<'static>], FormatError> {
+    static TRANSLATIONS: OnceLock<Result<Vec<Translation<'static>>, FormatError>> = OnceLock::new();
+    TRANSLATIONS
+        .get_or_init(|| {
+            BUNDLED_TRANSLATIONS
+                .iter()
+                .map(|b| Translation::from_bytes(b))
+                .collect()
+        })
+        .as_ref()
+        .map(Vec::as_slice)
+        .map_err(Clone::clone)
+}
+
+/// The search index of the embedded text and the bundled translations, built on first use (a few milliseconds; see
 /// DECISIONS.md D-015), then shared.
 pub fn search_index() -> Result<&'static SearchIndex<'static>, DataError> {
     static INDEX: OnceLock<SearchIndex<'static>> = OnceLock::new();
     let quran = quran()?;
-    Ok(INDEX.get_or_init(|| SearchIndex::new(*quran)))
+    let translations = bundled_translations().map_err(DataError::Format)?;
+    Ok(INDEX.get_or_init(|| {
+        let mut index = SearchIndex::new(*quran);
+        for t in translations {
+            // Cannot fail: a valid translation file has one string per verse.
+            let _ = index.add_text(t.id(), t.verses().collect());
+        }
+        index
+    }))
 }
 
 /// Summary for the UI.

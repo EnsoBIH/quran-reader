@@ -16,6 +16,8 @@ export interface AyahProps {
   meta?: ReactNode;
   /** Search matches to highlight in `text` (UTF-16 offsets). */
   marks?: readonly TextRange[];
+  /** Search matches to highlight in `translation`. */
+  translationMarks?: readonly TextRange[];
 }
 
 export function Ayah({
@@ -26,6 +28,7 @@ export function Ayah({
   translationLang = "en",
   meta,
   marks,
+  translationMarks,
 }: AyahProps) {
   const id = `${verseRef.surah}:${verseRef.ayah}`;
   const arabic = (
@@ -46,11 +49,12 @@ export function Ayah({
   const slot = view !== "arabic" && (
     <p
       lang={translationLang}
+      dir="auto"
       className="col-start-1 row-start-1 font-sans text-ink/85 leading-relaxed"
       style={{ fontSize: "var(--reader-translation-size)" }}
     >
       <span className="mr-2 text-muted tabular-nums text-sm">{id}</span>
-      {translation}
+      {translation !== undefined && <Marked text={translation} ranges={translationMarks} />}
     </p>
   );
   return (
