@@ -1,9 +1,20 @@
 # Pinned data sources for `cargo xtask`.
-# Every entry needs a fixed URL, a SHA-256 of the downloaded file and a license entry in LICENSES/README.md.
-# Filled in Phase 1 (Tanzil Uthmani text + metadata).
+# Every entry needs a fixed URL, a SHA-256 of the downloaded file and a license entry in
+# LICENSES/README.md. `cargo xtask fetch` refuses anything whose SHA-256 differs.
+# See DECISIONS.md (D-009, D-010) for why these exact files and formats were chosen.
 
-# [[source]]
-# id = "tanzil-uthmani"
-# url = "https://tanzil.net/pub/download/v1.0/..."
-# sha256 = "..."
-# license = "Tanzil terms of use"
+# Uthmani text as in the Madina Mushaf, Tanzil default options (pause marks and sajdah
+# signs on, rub-el-hizb signs off), XML output. The XML keeps the Basmala of surahs 2–114
+# (except 9) in its own `bismillah` attribute instead of prefixing it to verse 1.
+[[source]]
+id = "tanzil-uthmani"
+url = "https://tanzil.net/pub/download/v1.0/download.php?quranType=uthmani&outType=xml&marks=true&sajdah=true"
+sha256 = "faa75f9a61263a5661b5fdd02a56dec6224fffa97ad625f869eede8028042725"
+license = "Tanzil terms of use (CC BY 3.0, verbatim copies only)"
+
+# Quran metadata 1.0: surahs, juz, hizb quarters, manzils, rukus, pages, sajdas.
+[[source]]
+id = "tanzil-metadata"
+url = "https://tanzil.net/res/text/metadata/quran-data.xml"
+sha256 = "8867c1d88191472adec9db694b3cd9f135b1a2ef580574d32cf888dcb22c5c7a"
+license = "CC BY, (C) 2008-2009 Tanzil.info (as declared in the file)"
