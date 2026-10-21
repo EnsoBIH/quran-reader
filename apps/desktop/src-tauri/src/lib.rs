@@ -3,7 +3,7 @@
 use std::sync::OnceLock;
 use std::time::Instant;
 
-use quran_core::{CoreInfo, Hit, QuranText, Surah, SurahText};
+use quran_core::{CoreInfo, Hit, QuranText, SearchResults, Surah, SurahText};
 
 /// When `run` started, for the start-up measurement in [`text_visible`].
 static STARTED: OnceLock<Instant> = OnceLock::new();
@@ -46,6 +46,15 @@ fn lookup(query: &str, limit: usize) -> Result<Vec<Hit>, String> {
         .map_err(|e| e.to_string())
 }
 
+/// ⌘F search: matching verses with their matched ranges in the unmodified text.
+#[tauri::command]
+fn search(query: &str, limit: usize) -> Result<SearchResults, String> {
+    let index = quran_core::search_index().map_err(|e| e.to_string())?;
+    index
+        .search(query, limit.min(1000))
+        .map_err(|e| e.to_string())
+}
+
 /// Called by the UI once the first verses are painted. Returns milliseconds since start-up
 /// and prints them when `QURAN_READER_TIMING` is set (start-up target: < 300 ms).
 #[tauri::command]
@@ -60,6 +69,8 @@ fn text_visible() -> u64 {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     STARTED.get_or_init(Instant::now);
+    // Build the search index (≈3 ms) off the start-up path, so the first ⌘F search is fast.
+    std::thread::spawn(|| quran_core::search_index().is_ok());
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             core_info,
@@ -67,6 +78,7 @@ pub fn run() {
             surah,
             quran_text,
             lookup,
+            search,
             text_visible
         ])
         .run(tauri::generate_context!())

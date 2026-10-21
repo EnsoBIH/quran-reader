@@ -1,12 +1,13 @@
-//! `cargo bench -p quran-core` — load time of the data file, reference parsing and the
-//! payload of the `quran_text` command.
-//! Targets (README / plan): parse a reference in < 0.1 ms; text on the first frame.
+//! `cargo bench -p quran-core` — load time of the data file, reference parsing, the
+//! payload of the `quran_text` command and full-text search.
+//! Targets (README / plan): parse a reference in < 0.1 ms; text on the first frame; search
+//! the whole Quran in < 5 ms.
 //! Run one group with e.g. `cargo bench -p quran-core -- parse_ref`.
 
 use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use quran_core::{Quran, VerseRef, parse_ref};
+use quran_core::{AYAH_COUNT, Quran, SearchIndex, VerseRef, parse_ref};
 
 const DATA: &[u8] = include_bytes!("../../../data/quran.bin");
 
@@ -64,5 +65,72 @@ fn text(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, load, parse, text);
+/// Arabic searches over the whole text: common and rare words, a single letter (the worst
+/// case: almost every verse matches), a phrase, an exclusion and scopes.
+const SEARCHES: &[&str] = &[
+    "الله",
+    "رحمن",
+    "زيتون",
+    "م",
+    "\"ان الله\"",
+    "الله -رحمن",
+    "الله رحيم غفور",
+    "الله surah:2",
+    "الله juz:30",
+    "xyzzy",
+];
+
+fn search(c: &mut Criterion) {
+    let quran = Quran::from_bytes(DATA).expect("valid data");
+    c.bench_function("search index (build at load)", |b| {
+        b.iter(|| SearchIndex::new(black_box(quran)))
+    });
+    let index = SearchIndex::new(quran);
+    for query in SEARCHES {
+        c.bench_function(&format!("search({query:?}, 100)"), |b| {
+            b.iter(|| index.search(black_box(query), 100))
+        });
+    }
+
+    // The Latin path (translations from Phase 4) on synthetic text of similar size.
+    let words = [
+        "lorem",
+        "ipsum",
+        "dolor",
+        "sit",
+        "amet",
+        "consectetur",
+        "adipiscing",
+        "elit",
+        "sed",
+        "do",
+        "eiusmod",
+        "tempor",
+        "incididunt",
+        "ut",
+        "labore",
+        "et",
+        "dolore",
+        "magna",
+    ];
+    let synthetic: Vec<String> = (0..usize::from(AYAH_COUNT))
+        .map(|i| {
+            (0..30)
+                .map(|j| words[(i * 7 + j * 13) % words.len()])
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .collect();
+    let mut index = SearchIndex::new(quran);
+    index
+        .add_text("synthetic", synthetic.iter().map(String::as_str).collect())
+        .expect("one string per verse");
+    for query in ["magna", "\"sed do\"", "dolor -amet", "zzz"] {
+        c.bench_function(&format!("search({query:?}, 100) with a Latin text"), |b| {
+            b.iter(|| index.search(black_box(query), 100))
+        });
+    }
+}
+
+criterion_group!(benches, load, parse, text, search);
 criterion_main!(benches);

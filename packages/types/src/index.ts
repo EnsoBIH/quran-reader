@@ -86,6 +86,39 @@ export interface QuranText {
   sajdas: Sajda[];
 }
 
+/**
+ * A range of an unmodified text in UTF-16 code units, i.e. JavaScript string indices
+ * (`text.slice(start, end)`). Never splits a letter from its tashkeel.
+ */
+export interface TextRange {
+  start: number;
+  end: number;
+}
+
+/** Matched ranges in one searchable text of a verse. */
+export interface TextMatches {
+  /** `"quran"` for the Arabic; translation ids later. */
+  text: string;
+  /** Sorted, non-overlapping. */
+  ranges: TextRange[];
+}
+
+/** A verse that matches a search. */
+export interface SearchHit {
+  ref: VerseRef;
+  /** Global verse index (1:1 is 0). */
+  index: number;
+  matches: TextMatches[];
+}
+
+/** Returned by the `search` Tauri command. */
+export interface SearchResults {
+  /** All matching verses, also those beyond the limit. */
+  total: number;
+  /** Matching verses in Quran order, at most the limit. */
+  hits: SearchHit[];
+}
+
 /** Arabic only, Arabic with the translation below, or both side by side. */
 export type ReaderView = "arabic" | "stacked" | "columns";
 

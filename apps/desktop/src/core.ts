@@ -1,4 +1,4 @@
-import type { CoreInfo, Hit, QuranText } from "@quran-reader/types";
+import type { CoreInfo, Hit, QuranText, SearchResults } from "@quran-reader/types";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
 // Calls into quran-core. Each returns null when running in a plain browser (`pnpm dev:vite`).
@@ -18,6 +18,12 @@ export async function quranText(): Promise<QuranText | null> {
 export async function lookup(query: string, limit: number): Promise<Hit[]> {
   if (!isTauri()) return [];
   return invoke<Hit[]>("lookup", { query, limit });
+}
+
+/** ⌘F search. Rejects with a readable message (e.g. "surah 200 does not exist"). */
+export async function search(query: string, limit: number): Promise<SearchResults> {
+  if (!isTauri()) return { total: 0, hits: [] };
+  return invoke<SearchResults>("search", { query, limit });
 }
 
 /** Reports that text is on screen; resolves to milliseconds since the app started. */

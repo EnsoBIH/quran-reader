@@ -3,13 +3,15 @@
 //! Names are compared as *keys*. Latin input is folded to plain ASCII letters with common
 //! transliteration variants unified, so `Al-Baqarah`, `baqara` and `bakara` all become
 //! `bakara`. Arabic input loses its tashkeel and Quranic marks, alif variants become a bare
-//! alif and the article is dropped, so `البقرة` and `بقرة` meet. Keys are internal matching
-//! forms only and are never displayed.
+//! alif and the article is dropped, so `البقرة` and `بقرة` meet. The character folding is
+//! shared with the search index (`normalize.rs`). Keys are internal matching forms only and
+//! are never displayed.
 //!
 //! Keys are byte strings: Latin keys are ASCII, Arabic keys store each letter as its offset
 //! from U+0600. The two are never compared with each other.
 
 use crate::model::VerseRef;
+use crate::normalize::{self, Fold};
 
 /// A verse known by name. Keep this table small and add a test for every entry.
 pub(crate) struct Alias {
@@ -295,22 +297,14 @@ pub(crate) const ARABIC_HIZB: &[u8] = &[arabic('ح'), arabic('ز'), arabic('ب')
 pub(crate) const ARABIC_PAGE: &[u8] = &[arabic('ص'), arabic('ف'), arabic('ح'), arabic('ه')];
 
 fn latin_words(name: &str, words: &mut Words) {
-    for c in name.chars().flat_map(char::to_lowercase) {
-        match c {
-            'a'..='z' => words.push(c as u8),
-            'à' | 'á' | 'â' | 'ä' | 'å' | 'ā' => words.push(b'a'),
-            'è' | 'é' | 'ê' | 'ë' | 'ē' => words.push(b'e'),
-            'ì' | 'í' | 'î' | 'ï' | 'ī' => words.push(b'i'),
-            'ò' | 'ó' | 'ô' | 'ö' | 'ō' => words.push(b'o'),
-            'ù' | 'ú' | 'û' | 'ü' | 'ū' => words.push(b'u'),
-            'ḥ' | 'ḫ' => words.push(b'h'),
-            'ṣ' | 'š' => words.push(b's'),
-            'ḍ' => words.push(b'd'),
-            'ṭ' => words.push(b't'),
-            'ẓ' | 'ž' => words.push(b'z'),
-            'ġ' => words.push(b'g'),
-            // Ayn and hamza marks join the word: `an'aam`, `ra'd`, `mu'minun`.
-            '\'' | '’' | '‘' | '`' | 'ʿ' | 'ʾ' | 'ʼ' => {}
+    for c in name.chars() {
+        match normalize::latin(c) {
+            Fold::Letter(l) if l.is_ascii_lowercase() => words.push(l as u8),
+            Fold::Letters(a, b) if a.is_ascii_lowercase() && b.is_ascii_lowercase() => {
+                words.push(a as u8);
+                words.push(b as u8);
+            }
+            Fold::Drop => {}
             _ => words.end_word(),
         }
     }
@@ -319,19 +313,9 @@ fn latin_words(name: &str, words: &mut Words) {
 
 fn arabic_words(name: &str, words: &mut Words) {
     for c in name.chars() {
-        match c {
-            // Tashkeel, Quranic annotation marks, superscript alif, tatweel.
-            '\u{0610}'..='\u{061A}'
-            | '\u{064B}'..='\u{065F}'
-            | '\u{0670}'
-            | '\u{06D6}'..='\u{06ED}'
-            | '\u{0640}' => {}
-            'أ' | 'إ' | 'آ' | 'ٱ' => words.push(arabic('ا')),
-            'ى' | 'ئ' | 'ی' => words.push(arabic('ي')),
-            'ة' => words.push(arabic('ه')),
-            'ؤ' => words.push(arabic('و')),
-            'ک' => words.push(arabic('ك')),
-            '\u{0621}'..='\u{064A}' => words.push(arabic(c)),
+        match normalize::arabic(c) {
+            Fold::Drop => {}
+            Fold::Letter(l) => words.push(arabic(l)),
             _ => words.end_word(),
         }
     }

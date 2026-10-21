@@ -1,6 +1,7 @@
-import type { ReaderView, VerseRef } from "@quran-reader/types";
+import type { ReaderView, TextRange, VerseRef } from "@quran-reader/types";
 import type { ReactNode } from "react";
 import { END_OF_AYAH, toArabicIndic } from "./digits.ts";
+import { Marked } from "./Marked.tsx";
 
 export interface AyahProps {
   verseRef: VerseRef;
@@ -13,6 +14,8 @@ export interface AyahProps {
   translationLang?: string;
   /** A small line under the verse, e.g. page and sajda markers. */
   meta?: ReactNode;
+  /** Search matches to highlight in `text` (UTF-16 offsets). */
+  marks?: readonly TextRange[];
 }
 
 export function Ayah({
@@ -22,6 +25,7 @@ export function Ayah({
   translation,
   translationLang = "en",
   meta,
+  marks,
 }: AyahProps) {
   const id = `${verseRef.surah}:${verseRef.ayah}`;
   const arabic = (
@@ -31,7 +35,7 @@ export function Ayah({
       className="col-start-2 row-start-1 font-quran text-ink leading-[2.2]"
       style={{ fontSize: "var(--reader-arabic-size)" }}
     >
-      {text}{" "}
+      <Marked text={text} ranges={marks} />{" "}
       <span aria-hidden="true">
         {END_OF_AYAH}
         {toArabicIndic(verseRef.ayah)}

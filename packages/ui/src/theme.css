@@ -70,3 +70,10 @@
   --font-quran: "Amiri Quran", "Amiri", serif;
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+/* Search matches. Background only, so the text keeps its color and shaping. */
+.search-mark {
+  background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: inherit;
+  border-radius: 0.15em;
+}

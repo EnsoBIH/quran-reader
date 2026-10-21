@@ -1,4 +1,4 @@
-import type { ReaderView } from "@quran-reader/types";
+import type { ReaderView, TextRange } from "@quran-reader/types";
 import { Ayah, Basmala, SurahHeader } from "@quran-reader/ui";
 import {
   type CSSProperties,
@@ -33,6 +33,8 @@ import type { Settings } from "./settings.ts";
 export interface ReaderHandle {
   /** Puts `row` at the top of the viewport. */
   scrollToRow(row: number): void;
+  /** Moves keyboard focus to the reader (e.g. after closing search). */
+  focus(): void;
 }
 
 interface ReaderProps {
@@ -40,6 +42,8 @@ interface ReaderProps {
   settings: Settings;
   /** Row shown first. */
   initialRow: number;
+  /** Search matches to highlight in one verse (global verse index). */
+  marks?: { index: number; ranges: TextRange[] } | null;
   /** Called with the row at the top of the viewport whenever it changes. */
   onAnchor: (row: number) => void;
   /** Called once, after the first frame with text has been painted. */
@@ -53,7 +57,15 @@ const OVERSCAN = 800;
 const ARABIC_ADVANCE = 0.27;
 const COLUMN_GAP = 32;
 
-export function Reader({ mushaf, settings, initialRow, onAnchor, onFirstPaint, ref }: ReaderProps) {
+export function Reader({
+  mushaf,
+  settings,
+  initialRow,
+  marks,
+  onAnchor,
+  onFirstPaint,
+  ref,
+}: ReaderProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const heights = useRef<Heights | null>(null);
@@ -96,7 +108,14 @@ export function Reader({ mushaf, settings, initialRow, onAnchor, onFirstPaint, r
     pending.current = null;
     update();
   });
-  useImperativeHandle(ref, () => ({ scrollToRow: (row) => flushSync(() => jump(row)) }), [jump]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollToRow: (row) => flushSync(() => jump(row)),
+      focus: () => scroller.current?.focus({ preventScroll: true }),
+    }),
+    [jump],
+  );
 
   // Measured sizes. Runs after layout and before paint, so corrections are never visible.
   const [observer] = useState(
@@ -187,12 +206,19 @@ export function Reader({ mushaf, settings, initialRow, onAnchor, onFirstPaint, r
       ref={scroller}
       tabIndex={-1}
       onScroll={() => flushSync(update)}
-      className="min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none"
+      className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain outline-none"
     >
       <div ref={content} className="mx-auto w-full px-6 pb-[40vh]" style={style}>
         <div style={{ height: h ? h.offset(start) : 0 }} />
         {rows.map((row) => (
-          <Row key={row} mushaf={mushaf} row={row} view={view} observe={observe} />
+          <Row
+            key={row}
+            mushaf={mushaf}
+            row={row}
+            view={view}
+            observe={observe}
+            marks={marks && mushaf.rows[row] === marks.index ? marks.ranges : undefined}
+          />
         ))}
         <div style={{ height: h ? h.total() - h.offset(end) : 0 }} />
       </div>
@@ -205,9 +231,10 @@ interface RowProps {
   row: number;
   view: ReaderView;
   observe: RefCallback<HTMLDivElement>;
+  marks?: TextRange[];
 }
 
-const Row = memo(function Row({ mushaf, row, view, observe }: RowProps) {
+const Row = memo(function Row({ mushaf, row, view, observe, marks }: RowProps) {
   const r = mushaf.rows[row] ?? 0;
   if (r < 0) {
     const surah = mushaf.surahs[-r - 1];
@@ -248,6 +275,7 @@ const Row = memo(function Row({ mushaf, row, view, observe }: RowProps) {
         text={mushaf.verses[r] ?? ""}
         view={view}
         meta={meta.length > 0 ? meta.join(" · ") : undefined}
+        marks={marks}
       />
     </div>
   );

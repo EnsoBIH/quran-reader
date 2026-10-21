@@ -289,7 +289,7 @@ impl Query {
 }
 
 /// Arabic-Indic and Persian digits as ASCII.
-fn ascii_digit(c: char) -> char {
+pub(crate) fn ascii_digit(c: char) -> char {
     match c {
         '٠'..='٩' => char::from(b'0' + (c as u32 - '٠' as u32) as u8),
         '۰'..='۹' => char::from(b'0' + (c as u32 - '۰' as u32) as u8),

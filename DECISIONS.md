@@ -107,3 +107,38 @@ The copyright block from the top of the text file is written verbatim to `LICENS
 **Decision.** Theme (system/light/sepia/dark), view (Arabic, stacked, columns), Arabic and translation size and line width are stored as one JSON object under `quran-reader:settings`; the last reading position under `quran-reader:position`. Every field is validated on load and falls back to its default on its own. Navigation history (⌘[ / ⌘], Alt+← / →, mouse back/forward) is in memory only.
 
 **Consequences.** Phase 5 moves both into the SQLite store with the notes; the parsers in `settings.ts` and `history.ts` stay as the validation layer.
+
+## D-015 · Search index built at run time, not stored in the data file (2026-10-21)
+
+**Context.** Search must take under 5 ms over the whole Quran, ignoring tashkeel and letter variants, and the normalized forms must never be shown or shipped as text (D-004). The index could be built when it is first needed, or written into `data/quran.bin` by `cargo xtask build`.
+
+**Decision.** `quran_core::search_index()` builds it on first use from the embedded text and keeps it for the process; the Tauri app builds it on a background thread at start-up. The index (`crates/quran-core/src/search.rs`) is one normalized string per searchable text — all verses, each followed by `\n` — plus a verse offset table. A query scans that string for its longest word and checks the other words and the exclusions per candidate verse. For the hits it returns, it normalizes the verse again while recording, for every normalized byte, the bytes of the original it came from, and maps the matches back onto the unmodified text as UTF-16 ranges (JavaScript string indices). Marks are counted with the letter before them, so a range never splits a letter from its tashkeel.
+
+Normalization (`normalize.rs`, shared with the name matching of D-013): tashkeel, Quranic annotation marks (pause and sajda signs, small letters, U+06D6–06ED), the superscript alif and tatweel are dropped; أ إ آ ٱ → ا, ى ئ → ي, ة → ه, ؤ → و; for search only, a standalone hamza ء is dropped too, so Uthmani spellings such as `ءَامَنُوا` meet common ones (`آمنوا`). Latin text is lowercased with diacritics folded (`é` → `e`, `ß` → `ss`).
+
+Measured (Criterion, Apple Silicon, release):
+
+| | |
+| --- | --- |
+| build the index | 3.2 ms (once, off the start-up path) |
+| `search("زيتون")` (rare word, one scan) | 0.20 ms |
+| `search("الله")` (1,500+ verses, 100 with ranges) | 0.44 ms |
+| `search("م")` (a single letter, almost every verse) | 0.30 ms |
+| `search("الله -رحمن")` (slowest of the set) | 0.67 ms |
+| `search("الله juz:30")` | 0.02 ms |
+
+Stored in the file, the normalized text would add ≈ 750 KB (+55 %) to `data/quran.bin` and ≈ 0.6 ms of UTF-8 validation to every start, on the path to the first frame — to save 3.2 ms once, later and on another thread. It would also put a modified copy of the text into a shipped file, and `xtask verify` would need to check it.
+
+**Consequences.** No format change (`format::VERSION` stays 1). Known gaps of plain normalization on the Uthmani spelling: words written with a superscript alif or small letters don't meet the common spelling (`ٱلْكِتَٰبِ` → `الكتب`, so `كتاب` does not find it; `ٱلصَّلَوٰةَ` → `الصلوه`), and `يَٰٓأَيُّهَا` is one word in the text. Fixing that needs spelling-variant data (or the Tanzil simple text, aligned word by word) and is left for later. Translations (Phase 4) are added with `SearchIndex::add_text`; a query runs on each text on its own, and a verse is a hit if any text matches.
+
+## D-016 · Search query language (2026-10-21)
+
+**Decision.**
+
+- Words: all must occur in the verse (`رحمن رحيم`). Arabic words match anywhere inside a word, because particles, prepositions and the article are written together with the next word and pronouns with the one before (`رحمن` finds `ٱلرَّحْمَٰنِ`). Latin words match at the start of a word (`merc` finds `mercy`, `in` does not find `within`).
+- `"…"` (also `“…”`, `„…“`, `«…»`): a phrase, its words adjacent and in order. An unclosed quote runs to the end of the query.
+- `-word`, `-"…"`: the verse must not contain it. A query of exclusions only is rejected.
+- `surah:2`, `surah:2-4`, `surah:baqara` (any name the ⌘K palette knows), `juz:30`, `juz:28-30`; short forms `s:` and `j:`; Arabic-Indic digits work. Several `surah:` scopes add up, as do several `juz:` scopes; `surah:` and `juz:` together intersect (`surah:2 juz:1` is 2:1–2:141).
+- Results are in Quran order with the total count; the app asks for 100 at a time.
+
+**Consequences.** No ranking yet: in Quran order, results are predictable and the first hit of a common word is the first place it occurs. The ⌘F panel highlights matches with a background colour only, so the text keeps its colour and shaping.

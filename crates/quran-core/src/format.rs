@@ -355,7 +355,7 @@ impl<'a> Quran<'a> {
                     bismillah: s.bismillah,
                 })
                 .collect(),
-            verses: (0..AYAH_COUNT).map(|i| self.text_at(i)).collect(),
+            verses: self.verses().collect(),
             juz_starts: indices(self.juz).collect(),
             quarter_starts: indices(self.quarters).collect(),
             page_starts: indices(self.pages).collect(),
@@ -368,6 +368,11 @@ impl<'a> Quran<'a> {
                 })
                 .collect(),
         }
+    }
+
+    /// Unmodified Tanzil text of every verse, in Quran order.
+    pub fn verses(&self) -> impl ExactSizeIterator<Item = &'a str> + '_ {
+        (0..AYAH_COUNT).map(|i| self.text_at(i))
     }
 
     /// The verse at global index `i` (1:1 is 0).
