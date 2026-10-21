@@ -31,7 +31,9 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::model::{Ayah, Revelation, SajdaKind, Surah, SurahText, VerseRef};
+use crate::model::{
+    Ayah, Part, QuranText, Revelation, Sajda, SajdaKind, Surah, SurahEntry, SurahText, VerseRef,
+};
 use crate::reference::ParseError;
 use crate::{AYAH_COUNT, SURAH_COUNT};
 
@@ -342,6 +344,76 @@ impl<'a> Quran<'a> {
         })
     }
 
+    /// The whole text and its markers, ready to send to the UI once at start-up.
+    pub fn quran_text(&self) -> QuranText<'a> {
+        let indices = |starts: &'a [u8]| (0..starts.len() / 2).map(|i| read_u16(starts, i));
+        QuranText {
+            surahs: self
+                .surahs()
+                .map(|s| SurahEntry {
+                    surah: s.to_surah(),
+                    bismillah: s.bismillah,
+                })
+                .collect(),
+            verses: (0..AYAH_COUNT).map(|i| self.text_at(i)).collect(),
+            juz_starts: indices(self.juz).collect(),
+            quarter_starts: indices(self.quarters).collect(),
+            page_starts: indices(self.pages).collect(),
+            sajdas: self
+                .sajdas
+                .chunks_exact(SAJDA_RECORD_LEN)
+                .map(|r| Sajda {
+                    index: read_u16(r, 0),
+                    kind: sajda_kind(r[2]),
+                })
+                .collect(),
+        }
+    }
+
+    /// The verse at global index `i` (1:1 is 0).
+    pub fn verse_ref_at(&self, i: u16) -> Option<VerseRef> {
+        if i >= AYAH_COUNT {
+            return None;
+        }
+        // Validated: surahs are contiguous from verse 0, so the last one starting at or
+        // before `i` contains it.
+        let (mut lo, mut hi) = (0, usize::from(SURAH_COUNT));
+        while hi - lo > 1 {
+            let mid = (lo + hi) / 2;
+            if read_u16(&self.surahs[mid * SURAH_RECORD_LEN..], 0) <= i {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let first = read_u16(&self.surahs[lo * SURAH_RECORD_LEN..], 0);
+        Some(VerseRef::new(lo as u16 + 1, i - first + 1))
+    }
+
+    /// How many juz (30), hizbs (60) or pages (604) the data has.
+    pub fn part_count(&self, part: Part) -> u16 {
+        // Validated: juz and quarter counts fit in u8, page counts in u16.
+        match part {
+            Part::Juz => (self.juz.len() / 2) as u16,
+            Part::Hizb => (self.quarters.len() / 2 / 4) as u16,
+            Part::Page => (self.pages.len() / 2) as u16,
+        }
+    }
+
+    /// First verse of juz, hizb or page `number` (1-based).
+    pub fn part_start(&self, part: Part, number: u16) -> Option<VerseRef> {
+        if !(1..=self.part_count(part)).contains(&number) {
+            return None;
+        }
+        let i = usize::from(number - 1);
+        let start = match part {
+            Part::Juz => read_u16(self.juz, i),
+            Part::Hizb => read_u16(self.quarters, 4 * i),
+            Part::Page => read_u16(self.pages, i),
+        };
+        self.verse_ref_at(start)
+    }
+
     fn ayah_at(&self, verse_ref: VerseRef, i: u16) -> AyahMeta<'a> {
         // Validated: every list starts at verse 0, so the count is at least 1 and fits.
         let ordinal = |starts: &[u8]| count_starts_le(starts, i);
@@ -378,13 +450,7 @@ impl<'a> Quran<'a> {
             match read_u16(r, 0).cmp(&i) {
                 std::cmp::Ordering::Less => lo = mid + 1,
                 std::cmp::Ordering::Greater => hi = mid,
-                std::cmp::Ordering::Equal => {
-                    return Some(if r[2] == 0 {
-                        SajdaKind::Recommended
-                    } else {
-                        SajdaKind::Obligatory
-                    });
-                }
+                std::cmp::Ordering::Equal => return Some(sajda_kind(r[2])),
             }
         }
         None
@@ -679,6 +745,14 @@ fn count_starts_le(starts: &[u8], i: u16) -> usize {
         }
     }
     lo
+}
+
+fn sajda_kind(byte: u8) -> SajdaKind {
+    if byte == 0 {
+        SajdaKind::Recommended
+    } else {
+        SajdaKind::Obligatory
+    }
 }
 
 fn read_u16(bytes: &[u8], i: usize) -> u16 {

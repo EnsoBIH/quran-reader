@@ -1,4 +1,4 @@
-import type { CoreInfo, Surah, SurahText } from "@quran-reader/types";
+import type { CoreInfo, Hit, QuranText } from "@quran-reader/types";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
 // Calls into quran-core. Each returns null when running in a plain browser (`pnpm dev:vite`).
@@ -8,12 +8,20 @@ export async function coreInfo(): Promise<CoreInfo | null> {
   return invoke<CoreInfo>("core_info");
 }
 
-export async function surahs(): Promise<Surah[] | null> {
+/** The whole text with its markers, loaded once at start-up. */
+export async function quranText(): Promise<QuranText | null> {
   if (!isTauri()) return null;
-  return invoke<Surah[]>("surahs");
+  return invoke<QuranText>("quran_text");
 }
 
-export async function surah(number: number): Promise<SurahText | null> {
+/** ⌘K palette matches. Rejects with a readable message (e.g. "surah 2 has 286 verses"). */
+export async function lookup(query: string, limit: number): Promise<Hit[]> {
+  if (!isTauri()) return [];
+  return invoke<Hit[]>("lookup", { query, limit });
+}
+
+/** Reports that text is on screen; resolves to milliseconds since the app started. */
+export async function textVisible(): Promise<number | null> {
   if (!isTauri()) return null;
-  return invoke<SurahText>("surah", { number });
+  return invoke<number>("text_visible");
 }

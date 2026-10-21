@@ -2,9 +2,12 @@
 
 use std::process::ExitCode;
 
+use quran_core::Target;
+
 const USAGE: &str = "\
 usage:
-  quran read <ref>      print a verse, e.g. `quran read 2:255`
+  quran read <ref>      print a verse, e.g. `quran read 2:255` or `quran read kursi`
+  quran find <ref>      list what the ⌘K palette matches, e.g. `quran find bakara`
   quran search <query>  full-text search
   quran info            data and version info";
 
@@ -12,6 +15,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("read") => read(&args[1..].join(" ")),
+        Some("find") => find(&args[1..].join(" ")),
         Some("search") => {
             eprintln!("search: not implemented yet");
             ExitCode::FAILURE
@@ -29,6 +33,36 @@ fn main() -> ExitCode {
         }
         _ => {
             eprintln!("{USAGE}");
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn find(input: &str) -> ExitCode {
+    let quran = match quran_core::quran() {
+        Ok(q) => q,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match quran.lookup(input, 8) {
+        Ok(hits) => {
+            for hit in hits {
+                let r = hit.verse_ref;
+                let surah = quran.surah(r.surah).map_or("", |s| s.name_latin);
+                let what = match hit.target {
+                    Target::Verse => format!("{surah} {r}"),
+                    Target::Surah => format!("{surah} ({})", r.surah),
+                    Target::Named { name } => format!("{name} — {surah} {r}"),
+                    Target::Part { part, number } => format!("{part} {number} — {surah} {r}"),
+                };
+                println!("{what}");
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
             ExitCode::from(2)
         }
     }

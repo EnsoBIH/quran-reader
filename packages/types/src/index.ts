@@ -41,6 +41,54 @@ export interface SurahText {
   ayahs: Ayah[];
 }
 
+/** A division of the Madina Mushaf: 30 juz, 60 hizbs (of four quarters each), 604 pages. */
+export type Part = "juz" | "hizb" | "page";
+
+/** What a ⌘K palette entry points at. */
+export type Target =
+  | { kind: "verse" }
+  | { kind: "surah" }
+  | { kind: "named"; name: string }
+  | { kind: "part"; part: Part; number: number };
+
+/** One ⌘K palette entry, returned by the `lookup` Tauri command. */
+export interface Hit {
+  target: Target;
+  /** Where reading starts. */
+  ref: VerseRef;
+}
+
+/** A prostration verse, by global verse index (1:1 is 0). */
+export interface Sajda {
+  index: number;
+  kind: SajdaKind;
+}
+
+export interface SurahEntry extends Surah {
+  /** Basmala shown above verse 1. Absent for surah 1 (it is verse 1 there) and surah 9. */
+  bismillah?: string;
+}
+
+/**
+ * The whole Quran for continuous reading, returned once by the `quran_text` Tauri command.
+ * Verses are addressed by global index (1:1 is 0, 114:6 is 6235).
+ */
+export interface QuranText {
+  surahs: SurahEntry[];
+  /** Unmodified Tanzil text of every verse, in Quran order. Never normalize for display. */
+  verses: string[];
+  /** Global index of the first verse of each juz. */
+  juzStarts: number[];
+  /** Global index of the first verse of each hizb quarter (four per hizb). */
+  quarterStarts: number[];
+  /** Global index of the first verse of each page. */
+  pageStarts: number[];
+  sajdas: Sajda[];
+}
+
+/** Arabic only, Arabic with the translation below, or both side by side. */
+export type ReaderView = "arabic" | "stacked" | "columns";
+
 export type HighlightColor = 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface Highlight {
