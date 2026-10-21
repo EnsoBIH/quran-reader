@@ -1,6 +1,6 @@
 import type { ReaderView, TranslationInfo } from "@quran-reader/types";
 import { useEffect, useRef, useState } from "react";
-import { clampSize, LIMITS, type Settings, THEMES, VIEWS } from "./settings.ts";
+import { clampSize, LIMITS, type Settings, THEMES, VIEWS, withView } from "./settings.ts";
 import { type Library, languageName, languages } from "./translations.ts";
 
 interface SettingsPanelProps {
@@ -75,7 +75,7 @@ export function SettingsPanel({ settings, onChange, library, shown, onClose }: S
         options={VIEWS}
         value={settings.view}
         label={(v) => VIEW_LABEL[v]}
-        onPick={(view) => onChange({ ...settings, view })}
+        onPick={(view) => onChange(withView(settings, view))}
       />
       <TranslationChoice
         library={library}

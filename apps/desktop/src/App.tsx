@@ -27,7 +27,13 @@ import { Reader, type ReaderHandle, type VerseMarks } from "./Reader.tsx";
 import { SearchPanel } from "./SearchPanel.tsx";
 import { SettingsPanel } from "./SettingsPanel.tsx";
 import { arabicRanges, textRanges } from "./search.ts";
-import { applySettings, loadSettings, pickTranslation, saveSettings } from "./settings.ts";
+import {
+  applySettings,
+  loadSettings,
+  pickTranslation,
+  saveSettings,
+  toggleTranslation,
+} from "./settings.ts";
 import { useLibrary } from "./translations.ts";
 
 export interface Loaded {
@@ -243,6 +249,11 @@ function ReaderApp({
     if (palette || credits) return;
     const t = e.target as HTMLElement | null;
     const typing = t?.closest("input, select, textarea") != null;
+    if (!typing && !mod && !e.altKey && e.key.toLowerCase() === "t") {
+      e.preventDefault();
+      setSettings(toggleTranslation);
+      return;
+    }
     if (!typing && !mod && !e.altKey && e.key.toLowerCase() === "c") {
       e.preventDefault();
       setPanel(false);
@@ -296,6 +307,8 @@ function ReaderApp({
         onPalette={() => setPalette(true)}
         onSearch={openSearch}
         onCompare={() => setCompare(true)}
+        translationShown={settings.view !== "arabic"}
+        onTranslation={() => setSettings(toggleTranslation)}
         onSettings={() => setPanel((p) => !p)}
         settingsPanel={
           panel && (
@@ -376,6 +389,8 @@ interface TopBarProps {
   onPalette: () => void;
   onSearch: () => void;
   onCompare: () => void;
+  translationShown: boolean;
+  onTranslation: () => void;
   onSettings: () => void;
   settingsPanel: ReactNode;
 }
@@ -394,6 +409,8 @@ function TopBar({
   onPalette,
   onSearch,
   onCompare,
+  translationShown,
+  onTranslation,
   onSettings,
   settingsPanel,
 }: TopBarProps) {
@@ -520,8 +537,17 @@ function TopBar({
         </button>
         <button
           type="button"
+          onClick={onTranslation}
+          aria-pressed={translationShown}
+          className={`${select} text-muted hover:text-ink aria-pressed:text-ink`}
+          title={translationShown ? "Hide the translation (T)" : "Show the translation (T)"}
+        >
+          Translation <kbd className="font-sans">T</kbd>
+        </button>
+        <button
+          type="button"
           onClick={onCompare}
-          className={`${select} text-muted hover:text-ink`}
+          className={`${select} hidden text-muted hover:text-ink lg:block`}
           title="Compare translations of the current verse (C)"
         >
           Compare <kbd className="font-sans">C</kbd>

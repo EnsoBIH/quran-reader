@@ -178,3 +178,11 @@ Why separate:
 
 **Consequences.** Imports use the same search and display paths as bundled translations. An import that no longer loads (damaged, or a future incompatible format) is skipped at start-up with a message on stderr.
 
+## D-020 · Translation shown from the first start; T toggles it (2026-10-22)
+
+**Context.** With the Arabic-only view as the default, the bundled translation was visible only in the compare view (C) until the user found the view setting.
+
+**Decision.** New installs start in the stacked view (translation below each verse). T, or the Translation button in the top bar, hides the translation and shows it again in the view it was last shown in (`translatedView`, stored with the settings, D-014). Settings already saved keep their view.
+
+**Consequences.** Start-up now also loads the shown translation before the first frame (≈ 0.9 MB of JSON for Pickthall); it is fetched in parallel with the Arabic text. Readers who want the Arabic alone press T once.
+

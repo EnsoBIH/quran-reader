@@ -9,6 +9,8 @@ import {
   parseSettings,
   pickTranslation,
   saveSettings,
+  toggleTranslation,
+  withView,
 } from "./settings.ts";
 
 function translation(id: string, language: string, bundled = true): TranslationInfo {
@@ -107,5 +109,21 @@ describe("settings", () => {
     expect(pickTranslation(installed, "gone", ["de-AT", "en"])?.id).toBe("user.de.b");
     expect(pickTranslation(installed, null, ["fr"])?.id).toBe("en.a");
     expect(pickTranslation([], "en.a")).toBeNull();
+  });
+
+  it("shows the translation by default", () => {
+    expect(DEFAULT_SETTINGS.view).toBe("stacked");
+    expect(parseSettings({ view: "arabic" }).translatedView).toBe("stacked");
+    expect(parseSettings({ translatedView: "arabic" }).translatedView).toBe("stacked");
+  });
+
+  it("toggles the translation back to the view it was last shown in", () => {
+    const columns = withView(DEFAULT_SETTINGS, "columns");
+    expect(columns.translatedView).toBe("columns");
+    const hidden = toggleTranslation(columns);
+    expect(hidden.view).toBe("arabic");
+    expect(hidden.translatedView).toBe("columns");
+    expect(toggleTranslation(hidden).view).toBe("columns");
+    expect(withView(columns, "arabic").translatedView).toBe("columns");
   });
 });
