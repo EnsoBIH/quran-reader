@@ -7,7 +7,7 @@ version = "0.0.0"
 edition = "2024"
 rust-version = "1.90"
 license = "MIT"
-repository = "https://github.com/OWNER/quran-reader"
+repository = "https://github.com/EnsoBIH/quran-reader"
 
 [workspace.dependencies]
 quran-core = { path = "crates/quran-core" }
