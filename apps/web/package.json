@@ -1,0 +1,30 @@
+{
+  "name": "@quran-reader/web",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "@astrojs/react": "catalog:",
+    "@fontsource/amiri-quran": "catalog:",
+    "@quran-reader/types": "workspace:*",
+    "@quran-reader/ui": "workspace:*",
+    "astro": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@quran-reader/config": "workspace:*",
+    "@tailwindcss/vite": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:"
+  }
+}

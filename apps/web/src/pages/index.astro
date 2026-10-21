@@ -1,0 +1,56 @@
+---
+import { SurahHeader } from "@quran-reader/ui";
+import Base from "../layouts/Base.astro";
+
+const features = [
+  ["Instant", "Text on the first frame. Full-text search across the whole Quran in milliseconds."],
+  [
+    "Keyboard first",
+    "⌘K jumps to any verse — 2:255, baqara 255 or بقرة. ⌘F searches, ← → turns surahs.",
+  ],
+  ["Made for Arabic", "Proper shaping, right-to-left layout and tashkeel, set in Amiri Quran."],
+  [
+    "Study locally",
+    "Highlights, notes and bookmarks stay on your machine. Export to Markdown or JSON.",
+  ],
+];
+---
+
+<Base title="Quran Reader — fast, open source, private">
+  <section class="flex flex-col gap-6 text-center">
+    <h1 class="text-4xl font-semibold tracking-tight sm:text-5xl">A Quran reader that gets out of the way.</h1>
+    <p class="mx-auto max-w-xl text-lg text-muted">
+      Fast, beautifully typeset and fully open source. No accounts, no tracking.
+    </p>
+    <div class="flex justify-center gap-3">
+      <a href="/download" class="rounded-md bg-accent px-5 py-2.5 font-medium text-paper">Download</a>
+      <a href="https://github.com/OWNER/quran-reader" class="rounded-md border border-rule px-5 py-2.5 font-medium">
+        Source code
+      </a>
+    </div>
+  </section>
+
+  <section class="mt-16">
+    <SurahHeader
+      surah={{
+        number: 1,
+        nameArabic: "الفاتحة",
+        nameLatin: "Al-Fatihah",
+        nameTranslated: "The Opening",
+        revelation: "meccan",
+        ayahCount: 7,
+      }}
+    />
+  </section>
+
+  <section class="mt-16 grid gap-8 sm:grid-cols-2">
+    {
+      features.map(([title, body]) => (
+        <div>
+          <h2 class="font-medium">{title}</h2>
+          <p class="mt-1 text-muted">{body}</p>
+        </div>
+      ))
+    }
+  </section>
+</Base>

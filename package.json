@@ -1,0 +1,25 @@
+{
+  "name": "quran-reader",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:desktop": "turbo run dev --filter=@quran-reader/desktop",
+    "dev:web": "turbo run dev --filter=@quran-reader/web",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "biome format --write .",
+    "check": "biome check ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:"
+  }
+}

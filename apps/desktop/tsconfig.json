@@ -1,0 +1,7 @@
+{
+  "extends": "@quran-reader/config/tsconfig/react.json",
+  "compilerOptions": {
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}

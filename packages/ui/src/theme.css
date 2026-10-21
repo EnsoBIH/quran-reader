@@ -1,0 +1,72 @@
+/*
+ * Shared theme for the desktop app and the landing page.
+ * Consumers: `@import "tailwindcss"; @import "@quran-reader/ui/theme.css";`
+ */
+
+/* Let Tailwind see the classes used by the shared components. */
+@source ".";
+
+:root,
+[data-theme="light"] {
+  --paper: #fbfaf7;
+  --ink: #1c1b19;
+  --muted: #6b6760;
+  --rule: #e6e2da;
+  --accent: #2f6f5e;
+  color-scheme: light;
+}
+
+[data-theme="sepia"] {
+  --paper: #f4ecd8;
+  --ink: #3b2f22;
+  --muted: #7a6a55;
+  --rule: #e3d6b8;
+  --accent: #8a5a2b;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --paper: #141412;
+  --ink: #e8e4dc;
+  --muted: #9a958b;
+  --rule: #2a2925;
+  --accent: #7fbfa8;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --paper: #141412;
+    --ink: #e8e4dc;
+    --muted: #9a958b;
+    --rule: #2a2925;
+    --accent: #7fbfa8;
+    color-scheme: dark;
+  }
+}
+
+:root {
+  /* Reader settings, adjusted at runtime. */
+  --reader-arabic-size: 1.875rem;
+  --reader-translation-size: 1.0625rem;
+  --reader-measure: 42rem;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+
+  /* Highlight colors 1–6 (keys 1–6 in the reader). */
+  --color-mark-1: #f6d365;
+  --color-mark-2: #9be7a8;
+  --color-mark-3: #8ec5ff;
+  --color-mark-4: #f7a6c1;
+  --color-mark-5: #c9b2ff;
+  --color-mark-6: #ffb27a;
+
+  --font-quran: "Amiri Quran", "Amiri", serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}

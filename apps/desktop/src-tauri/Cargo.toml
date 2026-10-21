@@ -1,0 +1,25 @@
+[package]
+name = "quran-reader-desktop"
+description = "Quran Reader desktop app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+# The `_lib` suffix avoids a name clash with the binary on Windows (cargo#8519).
+name = "quran_reader_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+quran-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,36 @@
+{
+  "name": "@quran-reader/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "dev:vite": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "biome check .",
+    "typecheck": "tsc -p tsconfig.json",
+    "tauri": "tauri",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@fontsource/amiri-quran": "catalog:",
+    "@quran-reader/types": "workspace:*",
+    "@quran-reader/ui": "workspace:*",
+    "@tauri-apps/api": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@quran-reader/config": "workspace:*",
+    "@tailwindcss/vite": "catalog:",
+    "@tauri-apps/cli": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

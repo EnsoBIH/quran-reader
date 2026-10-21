@@ -1,0 +1,18 @@
+{
+  "name": "@quran-reader/types",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@quran-reader/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

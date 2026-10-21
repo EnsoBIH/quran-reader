@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "desktop-vite",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@quran-reader/desktop", "dev:vite"],
+      "port": 1420
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@quran-reader/web", "dev"],
+      "port": 4321
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>Quran Reader</title>
+  <rect width="1024" height="1024" rx="228" fill="#2f6f5e"/>
+  <g fill="none" stroke="#fbfaf7" stroke-width="44" stroke-linejoin="round">
+    <rect x="292" y="292" width="440" height="440"/>
+    <rect x="292" y="292" width="440" height="440" transform="rotate(45 512 512)"/>
+  </g>
+  <circle cx="512" cy="512" r="92" fill="#fbfaf7"/>
+</svg>

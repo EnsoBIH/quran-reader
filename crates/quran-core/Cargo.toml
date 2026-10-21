@@ -1,0 +1,18 @@
+[package]
+name = "quran-core"
+description = "Model, data format, reference parser and search for quran-reader"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "quran"
+path = "src/bin/quran.rs"
+
+[dependencies]
+serde.workspace = true
+
+[lints]
+workspace = true

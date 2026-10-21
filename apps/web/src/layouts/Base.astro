@@ -1,0 +1,43 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = "A fast, beautifully typeset Quran reader. Open source, no accounts, no tracking.",
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+  </head>
+  <body class="bg-paper text-ink antialiased">
+    <div class="mx-auto flex min-h-screen max-w-3xl flex-col px-4 sm:px-6">
+      <header class="flex items-center justify-between py-6 text-sm">
+        <a href="/" class="font-medium">Quran Reader</a>
+        <nav class="flex gap-5 text-muted">
+          <a href="/download" class="hover:text-ink">Download</a>
+          <a href="/privacy" class="hover:text-ink">Privacy</a>
+          <a href="https://github.com/OWNER/quran-reader" class="hover:text-ink">GitHub</a>
+        </nav>
+      </header>
+      <main class="flex-1 py-10">
+        <slot />
+      </main>
+      <footer class="border-t border-rule py-6 text-muted text-xs">
+        Code under MIT. Quran text from
+        <a href="https://tanzil.net" class="underline">Tanzil.net</a>, shown unmodified. Font: Amiri Quran (SIL OFL).
+      </footer>
+    </div>
+  </body>
+</html>

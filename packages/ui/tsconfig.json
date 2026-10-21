@@ -1,0 +1,4 @@
+{
+  "extends": "@quran-reader/config/tsconfig/react.json",
+  "include": ["src"]
+}

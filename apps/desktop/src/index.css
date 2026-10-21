@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@import "@fontsource/amiri-quran";
+@import "@quran-reader/ui/theme.css";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+}

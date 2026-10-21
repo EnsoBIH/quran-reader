@@ -1,0 +1,4 @@
+{
+  "extends": "@quran-reader/config/tsconfig/base.json",
+  "include": ["src"]
+}

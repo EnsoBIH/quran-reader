@@ -1,0 +1,9 @@
+# Pinned data sources for `cargo xtask`.
+# Every entry needs a fixed URL, a SHA-256 of the downloaded file and a license entry in LICENSES/README.md.
+# Filled in Phase 1 (Tanzil Uthmani text + metadata).
+
+# [[source]]
+# id = "tanzil-uthmani"
+# url = "https://tanzil.net/pub/download/v1.0/..."
+# sha256 = "..."
+# license = "Tanzil terms of use"
