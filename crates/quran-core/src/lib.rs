@@ -8,10 +8,14 @@ use std::sync::OnceLock;
 
 pub mod format;
 pub mod model;
+mod names;
 pub mod reference;
 
 pub use format::{AyahMeta, FormatError, Quran, SurahMeta};
-pub use model::{Ayah, CoreInfo, Revelation, SajdaKind, Surah, SurahText, VerseRef};
+pub use model::{
+    Ayah, CoreInfo, Hit, Part, QuranText, Revelation, Sajda, SajdaKind, Surah, SurahEntry,
+    SurahText, Target, VerseRef,
+};
 pub use reference::{ParseError, parse_ref};
 
 /// Number of surahs in the Quran.

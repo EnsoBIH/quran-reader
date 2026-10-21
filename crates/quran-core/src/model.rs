@@ -85,3 +85,81 @@ pub struct SurahText {
     pub bismillah: Option<String>,
     pub ayahs: Vec<Ayah>,
 }
+
+/// A division of the Madina Mushaf that can be jumped to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Part {
+    /// 30 parts.
+    Juz,
+    /// 60 parts, each four hizb quarters.
+    Hizb,
+    /// 604 pages.
+    Page,
+}
+
+impl fmt::Display for Part {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Juz => "juz",
+            Self::Hizb => "hizb",
+            Self::Page => "page",
+        })
+    }
+}
+
+/// What a ⌘K palette entry points at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Target {
+    /// A verse, given by number (`2:255`) or by surah name and number (`baqara 255`).
+    Verse,
+    /// A surah, given by number (`36`) or name (`yasin`), without a verse.
+    Surah,
+    /// A verse from the alias table, e.g. Ayat al-Kursi. `name` is its display name.
+    Named { name: &'static str },
+    /// The start of a juz, hizb or page.
+    Part { part: Part, number: u16 },
+}
+
+/// One ⌘K palette entry: what was matched and where reading starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Hit {
+    pub target: Target,
+    #[serde(rename = "ref")]
+    pub verse_ref: VerseRef,
+}
+
+/// A prostration verse, by global verse index (1:1 is 0).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Sajda {
+    pub index: u16,
+    pub kind: SajdaKind,
+}
+
+/// A surah with its Basmala, as part of [`QuranText`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SurahEntry<'a> {
+    #[serde(flatten)]
+    pub surah: Surah,
+    /// Basmala shown above verse 1. Absent for surah 1 (it is verse 1 there) and surah 9.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bismillah: Option<&'a str>,
+}
+
+/// The whole Quran for continuous reading, returned once by the `quran_text` Tauri command.
+/// Verses are addressed by global index (1:1 is 0, 114:6 is 6,235).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuranText<'a> {
+    pub surahs: Vec<SurahEntry<'a>>,
+    /// Unmodified Tanzil text of every verse, in Quran order.
+    pub verses: Vec<&'a str>,
+    /// Global index of the first verse of each juz.
+    pub juz_starts: Vec<u16>,
+    /// Global index of the first verse of each hizb quarter (four per hizb).
+    pub quarter_starts: Vec<u16>,
+    /// Global index of the first verse of each page.
+    pub page_starts: Vec<u16>,
+    pub sajdas: Vec<Sajda>,
+}

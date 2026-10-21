@@ -12,7 +12,8 @@
     "lint": "biome check .",
     "typecheck": "tsc -p tsconfig.json",
     "tauri": "tauri",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "test": "vitest run"
   },
   "dependencies": {
     "@fontsource/amiri-quran": "catalog:",
@@ -31,6 +32,7 @@
     "@vitejs/plugin-react": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

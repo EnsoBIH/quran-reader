@@ -2,7 +2,7 @@
 
 A fast, beautifully typeset Quran reader. Open source (MIT), no accounts, no tracking — all notes stay on your machine.
 
-> Status: **Phase 1 — data build.** The Tanzil Uthmani text and metadata are built into `data/quran.bin` from pinned sources; the desktop app shows one surah at a time and `cargo quran read 2:255` prints a verse.
+> Status: **Phase 2 — reader and navigation.** The desktop app scrolls continuously through the whole Quran (virtualized, with juz, hizb, page and sajda markers), jumps with ⌘K (`2:255`, `baqara 255`, `بقرة`, `Ayat al-Kursi`, `juz 30`, `page 604`), and remembers settings and the last position. `cargo quran read kursi` prints a verse.
 
 ## Goals
 
@@ -56,6 +56,7 @@ Rust CLI and data build:
 
 ```bash
 cargo quran read 2:255
+cargo quran find bakara   # what the ⌘K palette matches
 cargo xtask fetch    # download pinned sources into .cache/, check SHA-256
 cargo xtask build    # regenerate data/quran.bin and LICENSES/TANZIL.txt
 cargo xtask verify   # counts, Basmala rules, text digest, byte-for-byte rebuild

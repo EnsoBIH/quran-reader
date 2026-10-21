@@ -2,7 +2,7 @@
 //! the pinned Tanzil sources; together they make sure only the unmodified text ships.
 
 use quran_core::format::{FormatError, Quran};
-use quran_core::{AYAH_COUNT, Revelation, SURAH_COUNT, SajdaKind, VerseRef};
+use quran_core::{AYAH_COUNT, Part, Revelation, SURAH_COUNT, SajdaKind, VerseRef};
 use sha2::{Digest, Sha256};
 
 const AYAT_AL_KURSI_SHA256: &str =
@@ -184,4 +184,68 @@ fn rejects_corrupt_files_without_panicking() {
         }
         copy[i] ^= 0xff;
     }
+}
+
+#[test]
+fn global_indices_round_trip() {
+    let q = quran();
+    for s in q.surahs() {
+        for a in q.ayahs(s.number) {
+            let i = q.global_index(a.verse_ref).unwrap();
+            assert_eq!(q.verse_ref_at(i), Some(a.verse_ref));
+        }
+    }
+    assert_eq!(q.verse_ref_at(0), Some(VerseRef::new(1, 1)));
+    assert_eq!(q.verse_ref_at(AYAH_COUNT - 1), Some(VerseRef::new(114, 6)));
+    assert_eq!(q.verse_ref_at(AYAH_COUNT), None);
+}
+
+#[test]
+fn part_starts() {
+    let q = quran();
+    assert_eq!(q.part_count(Part::Juz), 30);
+    assert_eq!(q.part_count(Part::Hizb), 60);
+    assert_eq!(q.part_count(Part::Page), 604);
+    for part in [Part::Juz, Part::Hizb, Part::Page] {
+        assert_eq!(q.part_start(part, 1), Some(VerseRef::new(1, 1)));
+        assert_eq!(q.part_start(part, 0), None);
+        assert_eq!(q.part_start(part, q.part_count(part) + 1), None);
+        // Every part starts where the verse markers say it does.
+        for n in 1..=q.part_count(part) {
+            let r = q.part_start(part, n).unwrap();
+            let a = q.ayah(r).unwrap();
+            let number = match part {
+                Part::Juz => u16::from(a.juz),
+                Part::Hizb => u16::from(a.hizb_quarter).div_ceil(4),
+                Part::Page => a.page,
+            };
+            assert_eq!(number, n, "{part} {n} starts at {r}");
+        }
+    }
+}
+
+#[test]
+fn whole_text_for_the_reader() {
+    let q = quran();
+    let t = q.quran_text();
+    assert_eq!(t.surahs.len(), usize::from(SURAH_COUNT));
+    assert_eq!(t.verses.len(), usize::from(AYAH_COUNT));
+    assert_eq!(t.juz_starts.len(), 30);
+    assert_eq!(t.quarter_starts.len(), 240);
+    assert_eq!(t.page_starts.len(), 604);
+    assert_eq!(t.sajdas.len(), 15);
+    let kursi = VerseRef::new(2, 255);
+    let i = usize::from(q.global_index(kursi).unwrap());
+    assert_eq!(Some(t.verses[i]), q.text(kursi));
+    // Juz 2 starts at 2:142.
+    assert_eq!(q.verse_ref_at(t.juz_starts[1]), Some(VerseRef::new(2, 142)));
+
+    let json = serde_json::to_value(&t).unwrap();
+    assert_eq!(json["surahs"][1]["nameLatin"], "Al-Baqara");
+    assert_eq!(json["surahs"][1]["ayahCount"], 286);
+    assert!(json["surahs"][0].get("bismillah").is_none());
+    assert!(json["surahs"][8].get("bismillah").is_none());
+    assert!(json["surahs"][1]["bismillah"].is_string());
+    assert_eq!(json["pageStarts"][603], 6221);
+    assert_eq!(json["sajdas"][0]["kind"], "recommended");
 }
