@@ -8,6 +8,14 @@ body,
   height: 100%;
 }
 
+/* Only the reader pane scrolls. Without this, WebKit (macOS webview) rubber-bands the whole
+   document at the ends of a surah and drags the top bar and footer along. */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   font-family: var(--font-sans);
 }

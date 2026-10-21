@@ -56,8 +56,8 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col">
-      <nav className="flex items-center justify-between gap-4 border-b border-rule px-5 py-3 text-sm">
+    <div className="fixed inset-0 flex flex-col">
+      <nav className="flex shrink-0 items-center justify-between gap-4 border-b border-rule px-5 py-3 text-sm">
         <span className="font-medium">Quran Reader</span>
         <div className="flex items-center gap-2">
           <button
@@ -107,7 +107,7 @@ export function App() {
         </fieldset>
       </nav>
 
-      <main ref={main} className="flex-1 overflow-y-auto">
+      <main ref={main} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto w-full px-6 py-10" style={{ maxWidth: "var(--reader-measure)" }}>
           {text ? (
             <>
@@ -125,7 +125,7 @@ export function App() {
         </div>
       </main>
 
-      <footer className="flex justify-between gap-4 border-t border-rule px-5 py-2 text-muted text-xs tabular-nums">
+      <footer className="flex shrink-0 justify-between gap-4 border-t border-rule px-5 py-2 text-muted text-xs tabular-nums">
         <span>
           {error
             ? `core error: ${error}`
