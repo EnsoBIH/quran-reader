@@ -163,3 +163,58 @@ pub struct QuranText<'a> {
     pub page_starts: Vec<u16>,
     pub sajdas: Vec<Sajda>,
 }
+
+/// Returned by the `search` Tauri command: how many verses match, and the first of them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResults {
+    /// All matching verses, also those beyond the limit.
+    pub total: usize,
+    /// Matching verses in Quran order, at most the limit.
+    pub hits: Vec<SearchHit>,
+}
+
+/// A verse that matches a search.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SearchHit {
+    #[serde(rename = "ref")]
+    pub verse_ref: VerseRef,
+    /// Global verse index (1:1 is 0).
+    pub index: u16,
+    /// Per searchable text that matched, where.
+    pub matches: Vec<TextMatches>,
+}
+
+/// Matched ranges in one searchable text of a verse.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TextMatches {
+    /// Which text: [`crate::search::QURAN_TEXT`] for the Arabic, a translation id later.
+    pub text: String,
+    /// Sorted, non-overlapping ranges of the unmodified text.
+    pub ranges: Vec<TextRange>,
+}
+
+/// A range of an unmodified text in UTF-16 code units, i.e. JavaScript string indices
+/// (`text.slice(start, end)`). Never splits a letter from its tashkeel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct TextRange {
+    pub start: u32,
+    pub end: u32,
+}
+
+impl TextRange {
+    /// The same range as byte offsets into `text`, for slicing in Rust.
+    pub fn to_bytes(self, text: &str) -> std::ops::Range<usize> {
+        let (mut units, mut start) = (0, None);
+        for (i, c) in text.char_indices() {
+            if units == self.start {
+                start.get_or_insert(i);
+            }
+            if units >= self.end {
+                return start.unwrap_or(i)..i;
+            }
+            units += c.len_utf16() as u32;
+        }
+        start.unwrap_or(text.len())..text.len()
+    }
+}

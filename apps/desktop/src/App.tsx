@@ -1,4 +1,4 @@
-import type { CoreInfo, Hit, VerseRef } from "@quran-reader/types";
+import type { CoreInfo, Hit, SearchHit, TextRange, VerseRef } from "@quran-reader/types";
 import {
   type ReactNode,
   useCallback,
@@ -21,7 +21,9 @@ import {
 import { buildMushaf, indexOf, type Mushaf, refAt, refOfRow, rowOf } from "./mushaf.ts";
 import { Palette } from "./Palette.tsx";
 import { Reader, type ReaderHandle } from "./Reader.tsx";
+import { SearchPanel } from "./SearchPanel.tsx";
 import { SettingsPanel } from "./SettingsPanel.tsx";
+import { arabicRanges } from "./search.ts";
 import { applySettings, loadSettings, saveSettings } from "./settings.ts";
 
 export interface Loaded {
@@ -87,6 +89,9 @@ function ReaderApp({ mushaf, info }: { mushaf: Mushaf; info: CoreInfo | null }) 
   const historyRef = useRef(history);
   const [palette, setPalette] = useState(false);
   const [panel, setPanel] = useState(false);
+  const [search, setSearch] = useState<{ query: string; focus: number } | null>(null);
+  const [lastQuery, setLastQuery] = useState("");
+  const [found, setFound] = useState<{ index: number; ranges: TextRange[] } | null>(null);
   const reader = useRef<ReaderHandle>(null);
 
   useEffect(() => {
@@ -134,9 +139,30 @@ function ReaderApp({ mushaf, info }: { mushaf: Mushaf; info: CoreInfo | null }) 
     setPalette(false);
     go(hit.ref);
   };
+  const openSearch = () =>
+    setSearch((s) => ({ query: s?.query ?? lastQuery, focus: (s?.focus ?? 0) + 1 }));
+  const closeSearch = () => {
+    if (search) setLastQuery(search.query);
+    setSearch(null);
+    setFound(null);
+    reader.current?.focus();
+  };
+  const onSearchHit = (hit: SearchHit) => {
+    setFound({ index: hit.index, ranges: arabicRanges(hit) });
+    // Land on the verse itself, not on the surah header above verse 1.
+    commit(visit(historyRef.current, current(), hit.ref));
+    reader.current?.scrollToRow(mushaf.verseRow[hit.index] ?? 0);
+  };
 
   const onKey = useEffectEvent((e: KeyboardEvent) => {
     const mod = e.metaKey || e.ctrlKey;
+    if (mod && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      setPalette(false);
+      setPanel(false);
+      openSearch();
+      return;
+    }
     if (mod && e.key.toLowerCase() === "k") {
       e.preventDefault();
       setPanel(false);
@@ -195,6 +221,7 @@ function ReaderApp({ mushaf, info }: { mushaf: Mushaf; info: CoreInfo | null }) 
         onTravel={travel}
         onSurah={surahStep}
         onPalette={() => setPalette(true)}
+        onSearch={openSearch}
         onSettings={() => setPanel((p) => !p)}
         settingsPanel={
           panel && (
@@ -206,14 +233,28 @@ function ReaderApp({ mushaf, info }: { mushaf: Mushaf; info: CoreInfo | null }) 
           )
         }
       />
-      <Reader
-        ref={reader}
-        mushaf={mushaf}
-        settings={settings}
-        initialRow={initialRow}
-        onAnchor={onAnchor}
-        onFirstPaint={onFirstPaint}
-      />
+      <div className="flex min-h-0 flex-1">
+        <Reader
+          ref={reader}
+          mushaf={mushaf}
+          settings={settings}
+          initialRow={initialRow}
+          marks={found}
+          onAnchor={onAnchor}
+          onFirstPaint={onFirstPaint}
+        />
+        {search && (
+          <SearchPanel
+            mushaf={mushaf}
+            query={search.query}
+            onQuery={(query) => setSearch((s) => s && { ...s, query })}
+            focusKey={search.focus}
+            active={found?.index ?? null}
+            onGo={onSearchHit}
+            onClose={closeSearch}
+          />
+        )}
+      </div>
       <Footer info={info} error={null} />
       {palette && <Palette mushaf={mushaf} onGo={onHit} onClose={() => setPalette(false)} />}
     </div>
@@ -228,6 +269,7 @@ interface TopBarProps {
   onTravel: (direction: -1 | 1) => void;
   onSurah: (direction: -1 | 1) => void;
   onPalette: () => void;
+  onSearch: () => void;
   onSettings: () => void;
   settingsPanel: ReactNode;
 }
@@ -244,6 +286,7 @@ function TopBar({
   onTravel,
   onSurah,
   onPalette,
+  onSearch,
   onSettings,
   settingsPanel,
 }: TopBarProps) {
@@ -364,6 +407,9 @@ function TopBar({
         </form>
         <button type="button" onClick={onPalette} className={`${select} text-muted hover:text-ink`}>
           Go to… <kbd className="font-sans">⌘K</kbd>
+        </button>
+        <button type="button" onClick={onSearch} className={`${select} text-muted hover:text-ink`}>
+          Search <kbd className="font-sans">⌘F</kbd>
         </button>
         <button
           type="button"

@@ -9,14 +9,17 @@ use std::sync::OnceLock;
 pub mod format;
 pub mod model;
 mod names;
+mod normalize;
 pub mod reference;
+pub mod search;
 
 pub use format::{AyahMeta, FormatError, Quran, SurahMeta};
 pub use model::{
-    Ayah, CoreInfo, Hit, Part, QuranText, Revelation, Sajda, SajdaKind, Surah, SurahEntry,
-    SurahText, Target, VerseRef,
+    Ayah, CoreInfo, Hit, Part, QuranText, Revelation, Sajda, SajdaKind, SearchHit, SearchResults,
+    Surah, SurahEntry, SurahText, Target, TextMatches, TextRange, VerseRef,
 };
 pub use reference::{ParseError, parse_ref};
+pub use search::{QURAN_TEXT, SearchError, SearchIndex};
 
 /// Number of surahs in the Quran.
 pub const SURAH_COUNT: u16 = 114;
@@ -66,6 +69,14 @@ pub fn quran() -> Result<&'static Quran<'static>, DataError> {
         })
         .as_ref()
         .map_err(Clone::clone)
+}
+
+/// The search index of the embedded text, built on first use (a few milliseconds; see
+/// DECISIONS.md D-015), then shared.
+pub fn search_index() -> Result<&'static SearchIndex<'static>, DataError> {
+    static INDEX: OnceLock<SearchIndex<'static>> = OnceLock::new();
+    let quran = quran()?;
+    Ok(INDEX.get_or_init(|| SearchIndex::new(*quran)))
 }
 
 /// Summary for the UI.
