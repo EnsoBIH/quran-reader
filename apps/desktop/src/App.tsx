@@ -1,4 +1,11 @@
-import type { CoreInfo, Hit, SearchHit, TranslationInfo, VerseRef } from "@quran-reader/types";
+import type {
+  CoreInfo,
+  Hit,
+  SearchHit,
+  StudyData,
+  TranslationInfo,
+  VerseRef,
+} from "@quran-reader/types";
 import {
   type ReactNode,
   useCallback,
@@ -12,20 +19,14 @@ import {
 import { Compare } from "./Compare.tsx";
 import { Credits } from "./Credits.tsx";
 import * as core from "./core.ts";
-import {
-  canStep,
-  EMPTY_HISTORY,
-  type History,
-  loadPosition,
-  savePosition,
-  step,
-  visit,
-} from "./history.ts";
+import { canStep, EMPTY_HISTORY, type History, migratePosition, step, visit } from "./history.ts";
 import { buildMushaf, indexOf, type Mushaf, refAt, refOfRow, rowOf } from "./mushaf.ts";
+import { NoteEditor } from "./NoteEditor.tsx";
 import { Palette } from "./Palette.tsx";
-import { Reader, type ReaderHandle, type VerseMarks } from "./Reader.tsx";
+import { Reader, type ReaderHandle, type VerseAction, type VerseMarks } from "./Reader.tsx";
 import { SearchPanel } from "./SearchPanel.tsx";
 import { SettingsPanel } from "./SettingsPanel.tsx";
+import { StudyPanel, type StudyTab } from "./StudyPanel.tsx";
 import { arabicRanges, textRanges } from "./search.ts";
 import {
   applySettings,
@@ -34,6 +35,15 @@ import {
   saveSettings,
   toggleTranslation,
 } from "./settings.ts";
+import {
+  COLOR_NAMES,
+  copyText,
+  EMPTY_STUDY,
+  nextColor,
+  refLabel,
+  useStudy,
+  writeClipboard,
+} from "./study.ts";
 import { useLibrary } from "./translations.ts";
 
 export interface Loaded {
@@ -42,6 +52,11 @@ export interface Loaded {
   translations: TranslationInfo[];
   /** The text of the translation shown at start-up, if the view shows one. */
   texts: Map<string, string[]>;
+  study: StudyData;
+  /** Why the study store could not be read, if it could not. */
+  studyError: string | null;
+  /** Last reading position. */
+  position: VerseRef | null;
   error: string | null;
 }
 
@@ -62,10 +77,20 @@ export async function load(): Promise<Loaded> {
       }
       return { installed, texts };
     });
-    const [text, info, t] = await Promise.all([
+    const study = core.studyData().then(
+      (data) => ({ data: data ?? EMPTY_STUDY, error: null }),
+      (e: unknown) => ({ data: EMPTY_STUDY, error: String(e) }),
+    );
+    const position = core
+      .position()
+      .catch(() => null)
+      .then((stored) => migratePosition(stored, storage(), core.setPosition));
+    const [text, info, t, s, pos] = await Promise.all([
       core.quranText(),
       core.coreInfo(),
       translations,
+      study,
+      position,
       font,
     ]);
     return {
@@ -73,10 +98,22 @@ export async function load(): Promise<Loaded> {
       info,
       translations: t.installed,
       texts: t.texts,
+      study: s.data,
+      studyError: s.error,
+      position: pos,
       error: null,
     };
   } catch (e) {
-    return { mushaf: null, info: null, translations: [], texts: new Map(), error: String(e) };
+    return {
+      mushaf: null,
+      info: null,
+      translations: [],
+      texts: new Map(),
+      study: EMPTY_STUDY,
+      studyError: null,
+      position: null,
+      error: String(e),
+    };
   }
 }
 
@@ -128,9 +165,13 @@ function ReaderApp({
   const shown = pickTranslation(library.installed, settings.translation, userLanguages());
   const shownText = shown ? library.texts.get(shown.id) : undefined;
   const { ensure } = library;
-  const [initialRow] = useState(() =>
-    rowOf(mushaf, loadPosition(storage()) ?? { surah: 1, ayah: 1 }),
-  );
+  const [initialRow] = useState(() => rowOf(mushaf, loaded.position ?? { surah: 1, ayah: 1 }));
+  const study = useStudy(mushaf, loaded.study, loaded.studyError);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [studyPanel, setStudyPanel] = useState(false);
+  const [studyTab, setStudyTab] = useState<StudyTab>("bookmarks");
+  const [noteFor, setNoteFor] = useState<number | null>(null);
+  const [toast, setToast] = useState<{ text: string; id: number } | null>(null);
   const [anchor] = useState(() => createStore(initialRow));
   const [history, setHistory] = useState<History>(EMPTY_HISTORY);
   const historyRef = useRef(history);
@@ -171,10 +212,12 @@ function ReaderApp({
     saveSettings(storage(), settings);
   }, [settings]);
 
-  // Remember the reading position across restarts.
+  // Remember the reading position across restarts (in the study store).
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const save = () => savePosition(storage(), refOfRow(mushaf, anchor.get()));
+    const save = () => {
+      core.setPosition(refOfRow(mushaf, anchor.get())).catch(() => {});
+    };
     const unsubscribe = anchor.subscribe(() => {
       clearTimeout(timer);
       timer = setTimeout(save, 300);
@@ -211,8 +254,75 @@ function ReaderApp({
     setPalette(false);
     go(hit.ref);
   };
-  const openSearch = () =>
+  const openSearch = () => {
+    setStudyPanel(false);
     setSearch((s) => ({ query: s?.query ?? lastQuery, focus: (s?.focus ?? 0) + 1 }));
+  };
+  const toggleStudy = () => {
+    if (search) closeSearch();
+    setStudyPanel((p) => !p);
+  };
+
+  const notify = useCallback((text: string) => setToast({ text, id: Date.now() }), []);
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 2200);
+    return () => clearTimeout(id);
+  }, [toast]);
+
+  /** The verse 1–6, N, B and ⌘C act on: the selected one while it is in view, else the one being read. */
+  const target = () => {
+    const row = selected === null ? -1 : (mushaf.verseRow[selected] ?? -1);
+    if (selected !== null && reader.current?.isVisible(row)) return selected;
+    return indexOf(mushaf, current());
+  };
+  const act = (index: number, action: VerseAction) => {
+    const ref = refAt(mushaf, index);
+    const label = refLabel(mushaf, ref);
+    const failed = (e: unknown) => notify(String(e));
+    setSelected(index);
+    if (action.kind === "highlight") {
+      const color = nextColor(study.index.highlights.get(index), action.color);
+      study
+        .setHighlight(ref, color)
+        .then(() =>
+          notify(
+            color
+              ? `${label} highlighted ${COLOR_NAMES[color - 1]}`
+              : `Highlight removed from ${label}`,
+          ),
+        )
+        .catch(failed);
+    } else if (action.kind === "note") {
+      setNoteFor(index);
+    } else if (action.kind === "bookmark") {
+      const on = !study.index.bookmarks.has(index);
+      study
+        .setBookmark(ref, on)
+        .then(() => notify(on ? `Bookmarked ${label}` : `Bookmark removed from ${label}`))
+        .catch(failed);
+    } else {
+      const shownVerse =
+        settings.view !== "arabic" && translation ? translation.verses[index] : undefined;
+      writeClipboard(
+        copyText(
+          mushaf,
+          index,
+          shown && shownVerse ? { name: shown.name, verse: shownVerse } : null,
+        ),
+      )
+        .then(() => notify(`Copied ${label}`))
+        .catch(failed);
+    }
+  };
+  // Stable for the memoized rows; always runs the latest `act`.
+  const actRef = useRef(act);
+  actRef.current = act;
+  const onAction = useCallback((index: number, a: VerseAction) => actRef.current(index, a), []);
+  const goStudy = (to: VerseRef) => {
+    go(to);
+    setSelected(indexOf(mushaf, to));
+  };
   const closeSearch = () => {
     if (search) setLastQuery(search.query);
     setSearch(null);
@@ -246,9 +356,18 @@ function ReaderApp({
       setPanel((p) => !p);
       return;
     }
-    if (palette || credits) return;
+    if (palette || credits || noteFor !== null) return;
     const t = e.target as HTMLElement | null;
     const typing = t?.closest("input, select, textarea") != null;
+    const plain = !typing && !mod && !e.altKey;
+    // ⌘C copies the verse when no text is selected.
+    if (mod && !e.altKey && !typing && e.key.toLowerCase() === "c" && !compare) {
+      if (window.getSelection()?.isCollapsed !== false) {
+        e.preventDefault();
+        act(target(), { kind: "copy" });
+      }
+      return;
+    }
     if (!typing && !mod && !e.altKey && e.key.toLowerCase() === "t") {
       e.preventDefault();
       setSettings(toggleTranslation);
@@ -261,6 +380,31 @@ function ReaderApp({
       return;
     }
     if (compare) return;
+    if (plain && !e.shiftKey && /^[1-6]$/.test(e.key)) {
+      e.preventDefault();
+      act(target(), { kind: "highlight", color: Number(e.key) as 1 | 2 | 3 | 4 | 5 | 6 });
+      return;
+    }
+    if (plain && e.key.toLowerCase() === "n") {
+      e.preventDefault();
+      act(target(), { kind: "note" });
+      return;
+    }
+    if (plain && e.key.toLowerCase() === "b") {
+      e.preventDefault();
+      act(target(), { kind: "bookmark" });
+      return;
+    }
+    if (plain && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      toggleStudy();
+      return;
+    }
+    if (plain && e.key === "Escape" && selected !== null) {
+      e.preventDefault();
+      setSelected(null);
+      return;
+    }
     if ((mod && e.key === "[") || (e.altKey && e.key === "ArrowLeft")) {
       e.preventDefault();
       travel(-1);
@@ -306,6 +450,8 @@ function ReaderApp({
         onSurah={surahStep}
         onPalette={() => setPalette(true)}
         onSearch={openSearch}
+        studyShown={studyPanel}
+        onStudy={toggleStudy}
         onCompare={() => setCompare(true)}
         translationShown={settings.view !== "arabic"}
         onTranslation={() => setSettings(toggleTranslation)}
@@ -330,9 +476,28 @@ function ReaderApp({
           initialRow={initialRow}
           translation={settings.view === "arabic" ? null : translation}
           marks={marks}
+          study={study.index}
+          selected={selected}
+          onSelect={setSelected}
+          onAction={onAction}
           onAnchor={onAnchor}
           onFirstPaint={onFirstPaint}
         />
+        {studyPanel && (
+          <StudyPanel
+            mushaf={mushaf}
+            study={study}
+            tab={studyTab}
+            onTab={setStudyTab}
+            onGo={goStudy}
+            onEditNote={setNoteFor}
+            notify={notify}
+            onClose={() => {
+              setStudyPanel(false);
+              reader.current?.focus();
+            }}
+          />
+        )}
         {search && (
           <SearchPanel
             mushaf={mushaf}
@@ -349,6 +514,46 @@ function ReaderApp({
       </div>
       <Footer info={info} error={null} onCredits={() => setCredits(true)} />
       {palette && <Palette mushaf={mushaf} onGo={onHit} onClose={() => setPalette(false)} />}
+      {noteFor !== null && (
+        <NoteEditor
+          verse={refAt(mushaf, noteFor)}
+          label={refLabel(mushaf, refAt(mushaf, noteFor))}
+          arabic={mushaf.verses[noteFor] ?? ""}
+          translation={
+            translation && settings.view !== "arabic" && translation.verses[noteFor] !== undefined
+              ? { text: translation.verses[noteFor] ?? "", language: translation.language }
+              : undefined
+          }
+          initial={study.index.notes.get(noteFor) ?? ""}
+          onSave={(body) => {
+            const ref = refAt(mushaf, noteFor);
+            const label = refLabel(mushaf, ref);
+            const had = study.index.notes.has(noteFor);
+            setNoteFor(null);
+            reader.current?.focus();
+            study
+              .setNote(ref, body)
+              .then(() =>
+                notify(
+                  body.trim() ? `Note saved on ${label}` : had ? `Note deleted from ${label}` : "",
+                ),
+              )
+              .catch((e: unknown) => notify(String(e)));
+          }}
+          onClose={() => {
+            setNoteFor(null);
+            reader.current?.focus();
+          }}
+        />
+      )}
+      {toast?.text && (
+        <div
+          role="status"
+          className="pointer-events-none fixed bottom-12 left-1/2 z-30 -translate-x-1/2 rounded-full bg-ink px-4 py-1.5 text-paper text-sm shadow-lg"
+        >
+          {toast.text}
+        </div>
+      )}
       {compare && (
         <Compare
           mushaf={mushaf}
@@ -388,6 +593,8 @@ interface TopBarProps {
   onSurah: (direction: -1 | 1) => void;
   onPalette: () => void;
   onSearch: () => void;
+  studyShown: boolean;
+  onStudy: () => void;
   onCompare: () => void;
   translationShown: boolean;
   onTranslation: () => void;
@@ -408,6 +615,8 @@ function TopBar({
   onSurah,
   onPalette,
   onSearch,
+  studyShown,
+  onStudy,
   onCompare,
   translationShown,
   onTranslation,
@@ -534,6 +743,15 @@ function TopBar({
         </button>
         <button type="button" onClick={onSearch} className={`${select} text-muted hover:text-ink`}>
           Search <kbd className="font-sans">⌘F</kbd>
+        </button>
+        <button
+          type="button"
+          onClick={onStudy}
+          aria-pressed={studyShown}
+          className={`${select} text-muted hover:text-ink aria-pressed:text-ink`}
+          title="Bookmarks, notes, highlights, reading plan, export (S)"
+        >
+          Study <kbd className="font-sans">S</kbd>
         </button>
         <button
           type="button"

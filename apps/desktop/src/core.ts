@@ -1,4 +1,19 @@
-import type { CoreInfo, Hit, QuranText, SearchResults, TranslationInfo } from "@quran-reader/types";
+import type {
+  Bookmark,
+  CoreInfo,
+  Highlight,
+  HighlightColor,
+  Hit,
+  ImportMode,
+  ImportPreview,
+  Note,
+  PlanStatus,
+  QuranText,
+  SearchResults,
+  StudyData,
+  TranslationInfo,
+  VerseRef,
+} from "@quran-reader/types";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
 // Calls into quran-core. Each returns null when running in a plain browser (`pnpm dev:vite`).
@@ -48,6 +63,73 @@ export async function lookup(query: string, limit: number): Promise<Hit[]> {
 export async function search(query: string, limit: number): Promise<SearchResults> {
   if (!isTauri()) return { total: 0, hits: [] };
   return invoke<SearchResults>("search", { query, limit });
+}
+
+// Study store (one SQLite file in the app data folder; DECISIONS.md D-021). Every call
+// rejects with a readable message, e.g. when the store could not be opened.
+
+/** Highlights, notes, bookmarks and the plan. */
+export async function studyData(): Promise<StudyData | null> {
+  if (!isTauri()) return null;
+  return invoke<StudyData>("study_data");
+}
+
+/** Sets a verse's highlight, or removes it with `null`. */
+export async function setHighlight(verse: VerseRef, color: HighlightColor | null) {
+  return invoke<Highlight | null>("set_highlight", { verse, color });
+}
+
+/** Sets a verse's note; an empty body removes it. */
+export async function setNote(verse: VerseRef, body: string) {
+  return invoke<Note | null>("set_note", { verse, body });
+}
+
+/** Adds or relabels a bookmark (`label` null: none), or removes it. */
+export async function setBookmark(verse: VerseRef, bookmarked: boolean, label: string | null) {
+  return invoke<Bookmark | null>("set_bookmark", { verse, bookmarked, label });
+}
+
+/** The reading plan as of `today` (local `YYYY-MM-DD`), or null without one. */
+export async function planStatus(today: string) {
+  return invoke<PlanStatus | null>("plan_status", { today });
+}
+
+export async function startPlan(days: number, start: string, today: string) {
+  return invoke<PlanStatus | null>("start_plan", { days, start, today });
+}
+
+export async function stopPlan(): Promise<void> {
+  return invoke("stop_plan");
+}
+
+export async function setPlanDay(day: number, read: boolean, today: string) {
+  return invoke<PlanStatus | null>("set_plan_day", { day, read, today });
+}
+
+/** The last reading position, from the store. */
+export async function position(): Promise<VerseRef | null> {
+  if (!isTauri()) return null;
+  return invoke<VerseRef | null>("position");
+}
+
+export async function setPosition(verse: VerseRef): Promise<void> {
+  if (!isTauri()) return;
+  return invoke("set_position", { verse });
+}
+
+/** Writes an export to the Downloads folder; resolves to its path. */
+export async function exportStudy(format: "markdown" | "json", exported: string) {
+  return invoke<string>("export_study", { format, exported });
+}
+
+/** What importing an export (JSON or Markdown) would change. Changes nothing. */
+export async function previewImport(contents: string, mode: ImportMode) {
+  return invoke<ImportPreview>("preview_import", { contents, mode });
+}
+
+/** Imports an export; resolves to the study data afterwards. */
+export async function applyImport(contents: string, mode: ImportMode) {
+  return invoke<StudyData>("apply_import", { contents, mode });
 }
 
 /** Reports that text is on screen; resolves to milliseconds since the app started. */

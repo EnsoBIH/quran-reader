@@ -186,3 +186,39 @@ Why separate:
 
 **Consequences.** Start-up now also loads the shown translation before the first frame (≈ 0.9 MB of JSON for Pickthall); it is fetched in parallel with the Arabic text. Readers who want the Arabic alone press T once.
 
+
+## D-021 · Study store: SQLite via `rusqlite` (bundled) in `quran-core` (2026-10-22)
+
+**Context.** Highlights, notes, bookmarks, the reading plan and the last position must stay on the user's machine in one file, survive app updates (schema changes), and be testable without the UI. D-014 kept settings and position in localStorage until this phase.
+
+**Decision.**
+
+- `rusqlite` 0.40 with the `bundled` feature (default features off: no statement cache, no wasm backend), behind a `store` feature of `quran-core` that only the desktop app enables, so the CLI and `xtask` keep their lean dependency tree (D-011). `bundled` compiles SQLite into the binary, so every OS gets the same SQLite and no system library is needed. New crates in the tree: `rusqlite`, `libsqlite3-sys` (with `cc` at build time), `bitflags`, `smallvec`, `fallible-iterator`, `fallible-streaming-iterator`. Size cost, measured with the release profile (LTO, stripped, Apple Silicon) on a probe binary that opens a database and runs a query: +1.7 MB. Considered: a JSON file (no queries, no transactions, every change rewrites everything), `sqlx`/`diesel` (async runtime or ORM for six tables), the system SQLite (not on every Linux/Windows install, versions differ).
+- The file is `<app data>/study.sqlite3` (on macOS `~/Library/Application Support/io.github.quranreader.desktop/`), default rollback journal so it stays one file. Nothing in it ever leaves the machine except through the user's own export (D-022).
+- Every row is keyed by verse (`surah`, `ayah`), never by a translation, so it stays valid when the translation changes. One highlight, one note and one bookmark per verse.
+- Schema versions are SQLite's `user_version`. `store::MIGRATIONS` is an append-only list; opening a file runs each missing step in its own transaction, and a file with a higher version than the build knows (written by a newer app) is refused instead of changed. Tests cover a fresh file, reopening, an upgrade that keeps rows, a failing step that rolls back, and a newer file.
+- The last reading position moves from localStorage into the store (`state` table); an existing localStorage value is copied once at start-up and then removed (kept if the copy fails). Navigation history stays in memory: like a browser's back/forward it belongs to the session, and replaying it after a restart would send ⌘[ to places read days ago. Reader settings stay in localStorage: they are per-device display preferences, and the theme has to be known before the first frame.
+
+**Consequences.** `Store` is synchronous behind a mutex in the Tauri app; every call is a few small statements (well under a millisecond). Changing the schema means adding a migration and a test, never editing a shipped one. The bundle identifier (D-006) decides the folder, so it must stay fixed once released.
+
+## D-022 · Study features: keys, export formats and import merge (2026-10-22)
+
+**Decision.**
+
+- *Which verse.* Clicking a verse selects it (outline and a small toolbar: six colours, note, bookmark, copy). Keys act on the selected verse while it is in view, otherwise on the verse at the top of the reader (the one ⌘K/C also use): 1–6 highlight (the same key again removes it), N opens the note editor (Esc or ⌘↵ saves, an emptied note is deleted), B toggles a bookmark (labels are edited in the study panel), ⌘C copies the verse when no text is selected. S opens the study panel (bookmarks, notes, highlights with jump-to; plan; export/import); it shares the right side with ⌘F search.
+- *Highlights* are a tint of `--color-mark-1..6` behind the whole verse, not a text colour, so the Arabic keeps its colour and shaping.
+- *Copy* puts the unmodified Arabic, the shown translation (if any), `— Surah name s:a` and the attributions (Tanzil, and the translation's name) on the clipboard.
+- *Export* writes to the Downloads folder (`quran-reader-study-YYYY-MM-DD.md` / `.json`, never overwriting), so no dialog plugin is needed. JSON is lossless and versioned (`"format": "quran-reader-study", "version": 1`); a newer version is refused with a message. Markdown has a section per verse with its Arabic text, `- Highlight: yellow (1)`, `- Bookmark: label` and the note as a quote, plus the plan; it can be imported again and loses only the timestamps.
+- *Import* reads either format (JSON if it starts with `{`), validates everything first (existing verses, colours 1–6, one entry per verse, plan days), and shows a preview: per kind how many entries are new, changed, removed and unchanged, and which verses. *Merge* keeps the user's entries and adds the file's; on the same verse with different content the file wins. *Replace* makes the data exactly the file's. Entries with the same content keep their stored dates. A plan with the same length and start merges its read days. The whole import is one transaction.
+
+## D-023 · Khatm plan portions (2026-10-22)
+
+**Decision.** A plan has 1–604 days and a start date. Up to 240 days, the 240 hizb quarters are spread evenly (day *i* of *n* reads quarters ⌊(i−1)·240/n⌋ to ⌊i·240/n⌋ − 1), so 30 days is exactly one juz a day and 60 days one hizb a day; longer plans are cut by Madina Mushaf pages the same way. Portions come from `quran_core::plan::portions`; "today" is the UI's local date sent as `YYYY-MM-DD`, and the plan day is the calendar difference to the start (own date arithmetic, no date crate). The panel shows today's portion with Read / Mark as read, a catch-up card for the first unread earlier day, progress, and every day with a checkbox.
+
+## D-024 · Reader keeps the jumped-to verse in place while rows are measured (2026-10-22)
+
+**Context.** Phase 2 measured restored and jumped-to verses landing 60–150 px too high in the stacked view (in a browser pane, unconfirmed in the app). The ResizeObserver correction (D-012) found the reading row with `rowAt(scrollTop)`. Row offsets are fractional estimates and the browser rounds `scrollTop`, so after a jump to row *r* it could sit a fraction of a pixel above *r*'s offset; `rowAt` then said *r* − 1, and the measured size change of *r* − 1 — the row right above the target, with the largest estimate error in the stacked view — was not compensated, pushing the target off by that error.
+
+**Decision.** The correction now takes the reading row the same way as `update` does (one pixel in), remembers how far the viewport top is into it, and after applying the new sizes puts it back at exactly that distance. The re-estimate after a font or view change uses the same rule.
+
+**Consequences.** Measured in the real window (WKWebView, dev build), offset of the jumped-to row from the viewport top for 2:255, 18:10, 2:282, 24:35, 3:100, 36:1 and 9:60: stacked view before −55 −53 11 10 −54 1 −82 px, after 1 1 1 0 1 1 0; columns before 0 0 0 −57 0 −62 0, after 0 0 0 1 0 1 0; Arabic only 0 throughout. A plan portion (4:24) and a restore after restart (3:1, stacked) also land at 0. The bug was real, not only a test-environment artifact.

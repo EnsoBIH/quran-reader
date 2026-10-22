@@ -140,28 +140,90 @@ export interface TranslationInfo {
 /** Arabic only, Arabic with the translation below, or both side by side. */
 export type ReaderView = "arabic" | "stacked" | "columns";
 
+// Study data (crates/quran-core/src/study.rs). Keyed by verse, never by translation.
+
 export type HighlightColor = 1 | 2 | 3 | 4 | 5 | 6;
 
+/** Timestamps are UTC, `YYYY-MM-DDTHH:MM:SSZ`. */
 export interface Highlight {
-  id: string;
   ref: VerseRef;
   color: HighlightColor;
-  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Note {
-  id: string;
   ref: VerseRef;
+  /** Plain text, never empty. */
   body: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface Bookmark {
-  id: string;
   ref: VerseRef;
+  /** One line; absent without a label. */
   label?: string;
   createdAt: string;
+}
+
+/** A khatm plan: the whole Quran in `days` days from `start`. */
+export interface Plan {
+  days: number;
+  /** `YYYY-MM-DD`, day 1. */
+  start: string;
+  /** Days marked as read, ascending. */
+  read: number[];
+  createdAt: string;
+}
+
+/** Returned by the `study_data` Tauri command. Lists are sorted by verse. */
+export interface StudyData {
+  highlights: Highlight[];
+  notes: Note[];
+  bookmarks: Bookmark[];
+  plan?: Plan | null;
+}
+
+/** One day of a plan: whole hizb quarters up to 240 days, pages beyond. */
+export interface Portion {
+  day: number;
+  from: VerseRef;
+  /** Inclusive. */
+  to: VerseRef;
+  fromIndex: number;
+  toIndex: number;
+}
+
+/** Returned by the plan Tauri commands. */
+export interface PlanStatus {
+  plan: Plan;
+  portions: Portion[];
+  /** Plan day of today: below 1 before the start, above `days` after the end. */
+  today: number;
+}
+
+export type ImportMode = "merge" | "replace";
+
+export type Change = "added" | "changed" | "removed";
+
+/** What an import does to one kind of entry. */
+export interface Changes {
+  added: number;
+  changed: number;
+  removed: number;
+  unchanged: number;
+  /** The added, changed and removed entries, in Quran order. */
+  entries: { ref: VerseRef; change: Change }[];
+}
+
+/** Returned by the `preview_import` Tauri command. */
+export interface ImportPreview {
+  mode: ImportMode;
+  highlights: Changes;
+  notes: Changes;
+  bookmarks: Changes;
+  /** Absent when the plan stays as it is. */
+  plan?: Change | null;
 }
 
 export type Theme = "light" | "sepia" | "dark";

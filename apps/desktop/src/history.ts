@@ -43,9 +43,11 @@ export function step(
 export const canStep = (h: History, direction: -1 | 1) =>
   h.index >= 0 && h.entries[h.index + direction] !== undefined;
 
+// The last reading position lives in the study store (DECISIONS.md D-021). Versions before
+// it kept it in localStorage; that value is moved into the store once.
 const POSITION_KEY = "quran-reader:position";
 
-/** Last reading position, from untrusted JSON. */
+/** A position from untrusted JSON. */
 export function parsePosition(raw: unknown): VerseRef | null {
   if (typeof raw !== "object" || raw === null) return null;
   const { surah, ayah } = raw as Record<string, unknown>;
@@ -54,7 +56,9 @@ export function parsePosition(raw: unknown): VerseRef | null {
   return ok(surah, 114) && ok(ayah, 286) ? { surah: surah as number, ayah: ayah as number } : null;
 }
 
-export function loadPosition(storage: Pick<Storage, "getItem"> | undefined): VerseRef | null {
+type Legacy = Pick<Storage, "getItem" | "removeItem">;
+
+function loadLegacy(storage: Legacy | undefined): VerseRef | null {
   try {
     const raw = storage?.getItem(POSITION_KEY);
     return parsePosition(raw ? JSON.parse(raw) : null);
@@ -63,10 +67,34 @@ export function loadPosition(storage: Pick<Storage, "getItem"> | undefined): Ver
   }
 }
 
-export function savePosition(storage: Pick<Storage, "setItem"> | undefined, ref: VerseRef) {
-  try {
-    storage?.setItem(POSITION_KEY, JSON.stringify(ref));
-  } catch {
-    // Not persisted; the reader starts at the beginning next time.
+/**
+ * The position to start at: the stored one, else the one an older version left in
+ * localStorage, which is then saved to the store and removed (kept if saving fails, so the
+ * next start tries again).
+ */
+export async function migratePosition(
+  stored: VerseRef | null,
+  storage: Legacy | undefined,
+  save: (ref: VerseRef) => Promise<void>,
+): Promise<VerseRef | null> {
+  const legacy = loadLegacy(storage);
+  const drop = () => {
+    try {
+      storage?.removeItem(POSITION_KEY);
+    } catch {
+      // Left behind; ignored from now on.
+    }
+  };
+  if (stored) {
+    if (legacy) drop();
+    return stored;
   }
+  if (!legacy) return null;
+  try {
+    await save(legacy);
+    drop();
+  } catch {
+    // Keep it for the next start.
+  }
+  return legacy;
 }

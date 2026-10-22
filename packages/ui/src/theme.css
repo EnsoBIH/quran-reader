@@ -77,3 +77,36 @@
   color: inherit;
   border-radius: 0.15em;
 }
+
+/* Verse highlights (keys 1–6). A tint of the colour, so text keeps its colour and contrast;
+   lighter on dark themes. */
+.verse-highlight {
+  --highlight-strength: 32%;
+  background-color: color-mix(in srgb, var(--highlight) var(--highlight-strength), transparent);
+}
+[data-highlight="1"] {
+  --highlight: var(--color-mark-1);
+}
+[data-highlight="2"] {
+  --highlight: var(--color-mark-2);
+}
+[data-highlight="3"] {
+  --highlight: var(--color-mark-3);
+}
+[data-highlight="4"] {
+  --highlight: var(--color-mark-4);
+}
+[data-highlight="5"] {
+  --highlight: var(--color-mark-5);
+}
+[data-highlight="6"] {
+  --highlight: var(--color-mark-6);
+}
+[data-theme="dark"] .verse-highlight {
+  --highlight-strength: 18%;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .verse-highlight {
+    --highlight-strength: 18%;
+  }
+}

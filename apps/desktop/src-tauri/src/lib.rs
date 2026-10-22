@@ -2,13 +2,18 @@
 
 use std::borrow::Cow;
 use std::fs;
-use std::path::PathBuf;
-use std::sync::{OnceLock, RwLock};
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock, RwLock};
 use std::time::Instant;
 
+use quran_core::plan::Date;
+use quran_core::store::Store;
+use quran_core::study::{
+    self, Bookmark, Highlight, ImportMode, ImportPreview, Note, PlanStatus, StudyData,
+};
 use quran_core::{
     CoreInfo, Hit, QuranText, SearchIndex, SearchResults, Surah, SurahText, Translation,
-    TranslationInfo,
+    TranslationInfo, VerseRef,
 };
 use sha2::{Digest, Sha256};
 use tauri::Manager;
@@ -151,6 +156,36 @@ impl Library {
     }
 }
 
+/// The study store (highlights, notes, bookmarks, plan, last position): one SQLite file in
+/// the app data folder that never leaves this computer except through the user's export.
+struct Study(Mutex<Result<Store<'static>, String>>);
+
+impl Study {
+    fn open(path: Option<PathBuf>) -> Self {
+        let store = (|| {
+            let path = path.ok_or("no app data folder")?;
+            if let Some(dir) = path.parent() {
+                fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+            }
+            let quran = quran_core::quran().map_err(|e| e.to_string())?;
+            Store::open(&path, quran).map_err(|e| format!("{}: {e}", path.display()))
+        })();
+        if let Err(e) = &store {
+            eprintln!("study store: {e}");
+        }
+        Self(Mutex::new(store))
+    }
+
+    fn with<T>(
+        &self,
+        f: impl FnOnce(&mut Store<'static>) -> Result<T, study::StudyError>,
+    ) -> Result<T, String> {
+        let mut guard = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let store = guard.as_mut().map_err(|e| e.clone())?;
+        f(store).map_err(|e| e.to_string())
+    }
+}
+
 #[tauri::command]
 fn core_info() -> CoreInfo {
     quran_core::info()
@@ -285,6 +320,171 @@ fn search(
         .map_err(|e| e.to_string())
 }
 
+/// All highlights, notes, bookmarks and the plan, sorted by verse.
+#[tauri::command]
+fn study_data(study: tauri::State<'_, Study>) -> Result<StudyData, String> {
+    study.with(|s| s.data())
+}
+
+/// Sets a verse's highlight colour (1–6), or removes it with `null`.
+#[tauri::command]
+fn set_highlight(
+    study: tauri::State<'_, Study>,
+    verse: VerseRef,
+    color: Option<u8>,
+) -> Result<Option<Highlight>, String> {
+    study.with(|s| s.set_highlight(verse, color))
+}
+
+/// Sets a verse's note; an empty body removes it.
+#[tauri::command]
+fn set_note(
+    study: tauri::State<'_, Study>,
+    verse: VerseRef,
+    body: &str,
+) -> Result<Option<Note>, String> {
+    study.with(|s| s.set_note(verse, body))
+}
+
+/// Adds or relabels a bookmark, or removes it.
+#[tauri::command]
+fn set_bookmark(
+    study: tauri::State<'_, Study>,
+    verse: VerseRef,
+    bookmarked: bool,
+    label: Option<&str>,
+) -> Result<Option<Bookmark>, String> {
+    study.with(|s| {
+        if bookmarked {
+            s.set_bookmark(verse, label).map(Some)
+        } else {
+            s.remove_bookmark(verse).map(|()| None)
+        }
+    })
+}
+
+fn date(s: &str) -> Result<Date, study::StudyError> {
+    Date::parse(s).map_err(|e| study::StudyError::Invalid(e.to_string()))
+}
+
+/// The reading plan with its portions and the plan day of `today` (the UI's local date,
+/// `YYYY-MM-DD`), or `null` without a plan.
+#[tauri::command]
+fn plan_status(study: tauri::State<'_, Study>, today: &str) -> Result<Option<PlanStatus>, String> {
+    study.with(|s| {
+        let quran = quran_core::quran().map_err(|e| study::StudyError::Invalid(e.to_string()))?;
+        s.plan()?
+            .map(|p| study::plan_status(quran, &p, date(today)?))
+            .transpose()
+    })
+}
+
+/// Starts a plan of `days` days from `start`, replacing the current one.
+#[tauri::command]
+fn start_plan(
+    study: tauri::State<'_, Study>,
+    days: u16,
+    start: &str,
+    today: &str,
+) -> Result<Option<PlanStatus>, String> {
+    study.with(|s| s.start_plan(days, date(start)?).map(|_| ()))?;
+    plan_status(study, today)
+}
+
+#[tauri::command]
+fn stop_plan(study: tauri::State<'_, Study>) -> Result<(), String> {
+    study.with(|s| s.stop_plan())
+}
+
+/// Marks a plan day as read or not.
+#[tauri::command]
+fn set_plan_day(
+    study: tauri::State<'_, Study>,
+    day: u16,
+    read: bool,
+    today: &str,
+) -> Result<Option<PlanStatus>, String> {
+    study.with(|s| s.set_day_read(day, read).map(|_| ()))?;
+    plan_status(study, today)
+}
+
+/// The last reading position.
+#[tauri::command]
+fn position(study: tauri::State<'_, Study>) -> Result<Option<VerseRef>, String> {
+    study.with(|s| s.position())
+}
+
+#[tauri::command]
+fn set_position(study: tauri::State<'_, Study>, verse: VerseRef) -> Result<(), String> {
+    study.with(|s| s.set_position(verse))
+}
+
+/// Writes the study data to the Downloads folder as `markdown` or `json` and returns the
+/// file's path. `exported` is the local date and time shown in the Markdown file.
+#[tauri::command]
+fn export_study(
+    app: tauri::AppHandle,
+    study: tauri::State<'_, Study>,
+    format: &str,
+    exported: &str,
+) -> Result<String, String> {
+    let quran = quran_core::quran().map_err(|e| e.to_string())?;
+    let data = study.with(|s| s.data())?;
+    let (text, ext) = match format {
+        "json" => (study::to_json(&data, &quran_core::plan::now_utc()), "json"),
+        "markdown" => (study::to_markdown(&data, quran, exported), "md"),
+        other => return Err(format!("unknown export format {other:?}")),
+    };
+    let dir = app.path().download_dir().map_err(|e| e.to_string())?;
+    let day = exported
+        .get(..10)
+        .filter(|d| Date::parse(d).is_ok())
+        .unwrap_or("export");
+    let path = free_path(&dir, &format!("quran-reader-study-{day}"), ext);
+    fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(path.display().to_string())
+}
+
+/// `dir/stem.ext`, or `dir/stem (2).ext` and so on if that exists, so no file is overwritten.
+fn free_path(dir: &Path, stem: &str, ext: &str) -> PathBuf {
+    let mut path = dir.join(format!("{stem}.{ext}"));
+    let mut n = 2;
+    while path.exists() {
+        path = dir.join(format!("{stem} ({n}).{ext}"));
+        n += 1;
+    }
+    path
+}
+
+/// What importing an export file (JSON or Markdown) would change. Changes nothing.
+#[tauri::command]
+fn preview_import(
+    study: tauri::State<'_, Study>,
+    contents: &str,
+    mode: ImportMode,
+) -> Result<ImportPreview, String> {
+    let quran = quran_core::quran().map_err(|e| e.to_string())?;
+    study.with(|s| {
+        let file = study::parse_export(contents, quran, &quran_core::plan::now_utc())?;
+        s.preview_import(&file, mode)
+    })
+}
+
+/// Imports an export file, merging it into the study data or replacing it.
+#[tauri::command]
+fn apply_import(
+    study: tauri::State<'_, Study>,
+    contents: &str,
+    mode: ImportMode,
+) -> Result<StudyData, String> {
+    let quran = quran_core::quran().map_err(|e| e.to_string())?;
+    study.with(|s| {
+        let file = study::parse_export(contents, quran, &quran_core::plan::now_utc())?;
+        s.import(&file, mode)?;
+        s.data()
+    })
+}
+
 /// Called by the UI once the first verses are painted. Returns milliseconds since start-up
 /// and prints them when `QURAN_READER_TIMING` is set (start-up target: < 300 ms).
 #[tauri::command]
@@ -306,12 +506,9 @@ pub fn run() {
     STARTED.get_or_init(Instant::now);
     tauri::Builder::default()
         .setup(|app| {
-            let dir = app
-                .path()
-                .app_data_dir()
-                .ok()
-                .map(|d| d.join("translations"));
-            app.manage(Library::load(dir));
+            let data = app.path().app_data_dir().ok();
+            app.manage(Library::load(data.as_ref().map(|d| d.join("translations"))));
+            app.manage(Study::open(data.map(|d| d.join("study.sqlite3"))));
             // Build the search index off the start-up path, so the first ⌘F search is fast.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
@@ -331,6 +528,19 @@ pub fn run() {
             remove_translation,
             lookup,
             search,
+            study_data,
+            set_highlight,
+            set_note,
+            set_bookmark,
+            plan_status,
+            start_plan,
+            stop_plan,
+            set_plan_day,
+            position,
+            set_position,
+            export_study,
+            preview_import,
+            apply_import,
             text_visible
         ])
         .run(tauri::generate_context!())
