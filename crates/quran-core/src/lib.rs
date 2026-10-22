@@ -11,8 +11,13 @@ pub mod import;
 pub mod model;
 mod names;
 mod normalize;
+pub mod plan;
 pub mod reference;
 pub mod search;
+#[cfg(feature = "store")]
+pub mod store;
+#[cfg(feature = "store")]
+pub mod study;
 pub mod translation;
 
 pub use format::{AyahMeta, FormatError, Quran, SurahMeta};

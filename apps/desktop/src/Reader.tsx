@@ -1,4 +1,4 @@
-import type { ReaderView, TextRange } from "@quran-reader/types";
+import type { HighlightColor, ReaderView, TextRange } from "@quran-reader/types";
 import { Ayah, Basmala, SurahHeader } from "@quran-reader/ui";
 import {
   type CSSProperties,
@@ -23,6 +23,7 @@ import {
   STARTS_QUARTER,
 } from "./mushaf.ts";
 import type { Settings } from "./settings.ts";
+import { COLOR_NAMES, type StudyIndex } from "./study.ts";
 
 // Continuous, virtualized reader (DECISIONS.md D-012). Only rows near the viewport are
 // mounted, in normal flow between two spacers whose heights come from `Heights`. Rows are
@@ -45,9 +46,18 @@ export interface VerseMarks {
   translation: TextRange[];
 }
 
+/** What the toolbar under the selected verse does. */
+export type VerseAction =
+  | { kind: "highlight"; color: HighlightColor }
+  | { kind: "note" }
+  | { kind: "bookmark" }
+  | { kind: "copy" };
+
 export interface ReaderHandle {
   /** Puts `row` at the top of the viewport. */
   scrollToRow(row: number): void;
+  /** Whether any part of `row` is in the viewport. */
+  isVisible(row: number): boolean;
   /** Moves keyboard focus to the reader (e.g. after closing search). */
   focus(): void;
 }
@@ -61,6 +71,13 @@ interface ReaderProps {
   translation?: ShownTranslation | null;
   /** Search matches to highlight in one verse (global verse index). */
   marks?: VerseMarks | null;
+  /** Highlights, notes and bookmarks by global verse index. */
+  study?: StudyIndex | null;
+  /** The selected verse (global index): outlined, with a toolbar. */
+  selected?: number | null;
+  /** A click on a verse selects it (`null`: the selected one again, which unselects). */
+  onSelect?: (index: number | null) => void;
+  onAction?: (index: number, action: VerseAction) => void;
   /** Called with the row at the top of the viewport whenever it changes. */
   onAnchor: (row: number) => void;
   /** Called once, after the first frame with text has been painted. */
@@ -82,6 +99,10 @@ export function Reader({
   initialRow,
   translation,
   marks,
+  study,
+  selected,
+  onSelect,
+  onAction,
   onAnchor,
   onFirstPaint,
   ref,
@@ -132,28 +153,39 @@ export function Reader({
     ref,
     () => ({
       scrollToRow: (row) => flushSync(() => jump(row)),
+      isVisible: (row) => {
+        const el = scroller.current;
+        const h = heights.current;
+        if (!el || !h) return false;
+        return h.offset(row + 1) > el.scrollTop && h.offset(row) < el.scrollTop + el.clientHeight;
+      },
       focus: () => scroller.current?.focus({ preventScroll: true }),
     }),
     [jump],
   );
 
   // Measured sizes. Runs after layout and before paint, so corrections are never visible.
+  // The row at the top keeps its distance from the viewport edge. It is found the same way
+  // as in `update` (one pixel in): offsets are fractional and the browser rounds scrollTop,
+  // so a jump to row r can leave scrollTop a fraction above r's offset, where a plain
+  // rowAt(scrollTop) says r − 1 — and r − 1's correction would then push r off its place.
   const [observer] = useState(
     () =>
       new ResizeObserver((entries) => {
         const el = scroller.current;
         const h = heights.current;
         if (!el || !h) return;
-        const reading = h.rowAt(el.scrollTop);
-        let shift = 0;
+        const top = el.scrollTop;
+        const reading = h.rowAt(top + 1);
+        const within = top - h.offset(reading);
+        let changed = false;
         for (const entry of entries) {
           const row = mounted.current.get(entry.target);
           const size = entry.borderBoxSize[0]?.blockSize;
           if (row === undefined || size === undefined || size === 0) continue;
-          const delta = h.set(row, size);
-          if (row < reading) shift += delta;
+          if (h.set(row, size) !== 0 && row < reading) changed = true;
         }
-        if (shift !== 0) el.scrollTop += shift;
+        if (changed) el.scrollTop = h.offset(reading) + within;
       }),
   );
   useEffect(() => () => observer.disconnect(), [observer]);
@@ -202,7 +234,7 @@ export function Reader({
       jump(initialRow);
       return;
     }
-    const row = h.rowAt(el.scrollTop);
+    const row = h.rowAt(el.scrollTop + 1);
     const within = (el.scrollTop - h.offset(row)) / Math.max(h.size(row), 1);
     h.reset(estimate);
     for (const [node, r] of mounted.current) h.set(r, node.getBoundingClientRect().height);
@@ -237,17 +269,26 @@ export function Reader({
     >
       <div ref={content} className="mx-auto w-full px-6 pb-[40vh]" style={style}>
         <div style={{ height: h ? h.offset(start) : 0 }} />
-        {rows.map((row) => (
-          <Row
-            key={row}
-            mushaf={mushaf}
-            row={row}
-            view={view}
-            observe={observe}
-            translation={translation}
-            marks={marks && mushaf.rows[row] === marks.index ? marks : undefined}
-          />
-        ))}
+        {rows.map((row) => {
+          const r = mushaf.rows[row] ?? 0;
+          return (
+            <Row
+              key={row}
+              mushaf={mushaf}
+              row={row}
+              view={view}
+              observe={observe}
+              translation={translation}
+              marks={marks && r === marks.index ? marks : undefined}
+              highlight={study?.highlights.get(r)}
+              note={study?.notes.get(r)}
+              bookmark={study?.bookmarks.get(r)}
+              selected={selected === r}
+              onSelect={onSelect}
+              onAction={onAction}
+            />
+          );
+        })}
         <div style={{ height: h ? h.total() - h.offset(end) : 0 }} />
       </div>
     </div>
@@ -261,9 +302,29 @@ interface RowProps {
   observe: RefCallback<HTMLDivElement>;
   translation?: ShownTranslation | null;
   marks?: VerseMarks;
+  highlight?: HighlightColor;
+  note?: string;
+  /** Label, or "" without one; undefined when not bookmarked. */
+  bookmark?: string;
+  selected: boolean;
+  onSelect?: (index: number | null) => void;
+  onAction?: (index: number, action: VerseAction) => void;
 }
 
-const Row = memo(function Row({ mushaf, row, view, observe, translation, marks }: RowProps) {
+const Row = memo(function Row({
+  mushaf,
+  row,
+  view,
+  observe,
+  translation,
+  marks,
+  highlight,
+  note,
+  bookmark,
+  selected,
+  onSelect,
+  onAction,
+}: RowProps) {
   const r = mushaf.rows[row] ?? 0;
   if (r < 0) {
     const surah = mushaf.surahs[-r - 1];
@@ -288,8 +349,23 @@ const Row = memo(function Row({ mushaf, row, view, observe, translation, marks }
     starts & STARTS_PAGE ? `Page ${mushaf.pageOf[r]}` : null,
     sajda ? `۩ Sajda (${sajda})` : null,
   ].filter((m) => m !== null);
+  const bookmarkLine = bookmark !== undefined && (
+    <span className="text-accent">Bookmark{bookmark !== "" && `: ${bookmark}`}</span>
+  );
   return (
-    <div ref={observe} data-row={row} className="border-b border-rule">
+    // biome-ignore lint/a11y/useKeyWithClickEvents lint/a11y/noStaticElementInteractions: the keyboard acts on the reading verse (1–6, N, B, ⌘C); a click only picks another one
+    <div
+      ref={observe}
+      data-row={row}
+      data-selected={selected || undefined}
+      className="border-b border-rule"
+      onClick={(e) => {
+        // Selecting text, or clicking a control inside the row, doesn't change the selection.
+        if (window.getSelection()?.isCollapsed === false) return;
+        if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
+        onSelect?.(selected ? null : r);
+      }}
+    >
       {band && (
         <p className="flex items-center gap-3 pt-5 text-accent text-xs uppercase tracking-[0.15em]">
           <span aria-hidden="true" className="font-quran text-base normal-case">
@@ -305,13 +381,94 @@ const Row = memo(function Row({ mushaf, row, view, observe, translation, marks }
         view={view}
         translation={translation?.verses[r]}
         translationLang={translation?.language}
-        meta={meta.length > 0 ? meta.join(" · ") : undefined}
+        meta={
+          meta.length > 0 || bookmarkLine ? (
+            <>
+              {meta.join(" · ")}
+              {meta.length > 0 && bookmarkLine && " · "}
+              {bookmarkLine}
+            </>
+          ) : undefined
+        }
         marks={marks?.arabic}
         translationMarks={marks?.translation}
-      />
+        highlight={highlight}
+      >
+        {(note !== undefined || selected) && (
+          <>
+            {note !== undefined && (
+              <button
+                type="button"
+                onClick={() => onAction?.(r, { kind: "note" })}
+                className="block w-full whitespace-pre-wrap border-accent/60 border-l-2 py-0.5 pl-3 text-left text-ink/80 text-sm hover:text-ink"
+                title="Edit the note (N)"
+              >
+                {note}
+              </button>
+            )}
+            {selected && (
+              <Toolbar
+                index={r}
+                highlight={highlight}
+                bookmarked={bookmark !== undefined}
+                hasNote={note !== undefined}
+                onAction={onAction}
+              />
+            )}
+          </>
+        )}
+      </Ayah>
     </div>
   );
 });
+
+const tool = "rounded px-2 py-1 text-muted text-xs hover:bg-rule/60 hover:text-ink";
+
+/** Actions for the selected verse, with their keys. */
+function Toolbar({
+  index,
+  highlight,
+  bookmarked,
+  hasNote,
+  onAction,
+}: {
+  index: number;
+  highlight?: HighlightColor;
+  bookmarked: boolean;
+  hasNote: boolean;
+  onAction?: (index: number, action: VerseAction) => void;
+}) {
+  return (
+    <div role="toolbar" aria-label="Verse" className="mt-2 flex flex-wrap items-center gap-1">
+      {([1, 2, 3, 4, 5, 6] as const).map((c) => (
+        <button
+          key={c}
+          type="button"
+          aria-pressed={highlight === c}
+          aria-label={`Highlight ${COLOR_NAMES[c - 1]} (${c})`}
+          title={`${highlight === c ? "Remove the highlight" : `Highlight ${COLOR_NAMES[c - 1]}`} (${c})`}
+          onClick={() => onAction?.(index, { kind: "highlight", color: c })}
+          className="size-5 rounded-full border border-rule aria-pressed:ring-2 aria-pressed:ring-accent"
+          style={{ backgroundColor: `var(--color-mark-${c})` }}
+        />
+      ))}
+      <span className="mx-1 h-4 w-px bg-rule" />
+      <button type="button" className={tool} onClick={() => onAction?.(index, { kind: "note" })}>
+        {hasNote ? "Edit note" : "Note"} <kbd className="font-sans">N</kbd>
+      </button>
+      <button
+        type="button"
+        className={tool}
+        onClick={() => onAction?.(index, { kind: "bookmark" })}
+      >
+        {bookmarked ? "Remove bookmark" : "Bookmark"} <kbd className="font-sans">B</kbd>
+      </button>
+      <button type="button" className={tool} onClick={() => onAction?.(index, { kind: "copy" })}>
+        Copy <kbd className="font-sans">⌘C</kbd>
+      </button>
+    </div>
+  );
+}
 
 /** Height estimates in pixels; measuring replaces them as rows are rendered. */
 function estimator(

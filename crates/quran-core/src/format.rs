@@ -414,6 +414,12 @@ impl<'a> Quran<'a> {
         self.verse_ref_at(start)
     }
 
+    /// Global index of the first verse of hizb quarter `number` (1–240).
+    pub fn quarter_start(&self, number: u16) -> Option<u16> {
+        let i = usize::from(number.checked_sub(1)?);
+        (i < self.quarters.len() / 2).then(|| read_u16(self.quarters, i))
+    }
+
     fn ayah_at(&self, verse_ref: VerseRef, i: u16) -> AyahMeta<'a> {
         // Validated: every list starts at verse 0, so the count is at least 1 and fits.
         let ordinal = |starts: &[u8]| count_starts_le(starts, i);

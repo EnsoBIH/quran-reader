@@ -2,12 +2,12 @@
 
 A fast, beautifully typeset Quran reader. Open source (MIT), no accounts, no tracking — all notes stay on your machine.
 
-> Status: **Phase 4 — translations.** The desktop app scrolls continuously through the whole Quran (virtualized, with juz, hizb, page and sajda markers), jumps with ⌘K (`2:255`, `baqara 255`, `بقرة`, `Ayat al-Kursi`, `juz 30`, `page 604`), searches the Arabic text and the translations with ⌘F (tashkeel and letter variants ignored; `"phrases"`, `-exclusions`, `surah:2`, `juz:30`), shows a translation below or beside the Arabic (T toggles it; Pickthall's English is bundled; any other, e.g. from Tanzil, can be [imported](docs/translation-import.md)), compares all installed translations of a verse with C, and remembers settings and the last position. `cargo quran read kursi` prints a verse, `cargo quran search رحمن juz:30` searches.
+> Status: **Phase 5 — study.** The desktop app scrolls continuously through the whole Quran (virtualized, with juz, hizb, page and sajda markers), jumps with ⌘K (`2:255`, `baqara 255`, `بقرة`, `Ayat al-Kursi`, `juz 30`, `page 604`), searches the Arabic text and the translations with ⌘F (tashkeel and letter variants ignored; `"phrases"`, `-exclusions`, `surah:2`, `juz:30`), shows a translation below or beside the Arabic (T toggles it; Pickthall's English is bundled; any other, e.g. from Tanzil, can be [imported](docs/translation-import.md)), compares all installed translations of a verse with C, and has local study tools: highlights in six colours (1–6), notes (N), bookmarks (B), copy with reference (⌘C), a khatm reading plan, and export / import as Markdown and JSON (S opens the study panel). Study data and the last position live in one SQLite file in the app data folder. `cargo quran read kursi` prints a verse, `cargo quran search رحمن juz:30` searches.
 
 ## Goals
 
 - **Instant** — text on the first frame, full-text search in milliseconds.
-- **Keyboard first** — ⌘K for references (`2:255`, `baqara 255`, `بقرة`), ⌘F to search, ← → for surahs, T for the translation, C to compare translations.
+- **Keyboard first** — ⌘K for references (`2:255`, `baqara 255`, `بقرة`), ⌘F to search, ← → for surahs, T for the translation, C to compare translations, 1–6 / N / B / ⌘C on a verse, S for the study panel.
 - **Typography** — calm layout, light / sepia / dark, adjustable size and measure; proper Arabic shaping and RTL.
 - **Local study** — highlights in six colors, notes, bookmarks in a local SQLite file, export to Markdown/JSON.
 - **Clean licensing** — only freely redistributable content in the repo, pinned sources with SHA-256, reproducible data build.

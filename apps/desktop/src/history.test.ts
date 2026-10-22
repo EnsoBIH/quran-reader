@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canStep, EMPTY_HISTORY, parsePosition, step, visit } from "./history.ts";
+import { canStep, EMPTY_HISTORY, migratePosition, parsePosition, step, visit } from "./history.ts";
 
 const r = (surah: number, ayah: number) => ({ surah, ayah });
 
@@ -73,5 +73,43 @@ describe("parsePosition", () => {
     ]) {
       expect(parsePosition(bad)).toBeNull();
     }
+  });
+});
+
+describe("migratePosition", () => {
+  const storage = (value: string | null) => {
+    const items = new Map<string, string>();
+    if (value !== null) items.set("quran-reader:position", value);
+    return {
+      items,
+      getItem: (k: string) => items.get(k) ?? null,
+      removeItem: (k: string) => void items.delete(k),
+    };
+  };
+
+  it("moves an old localStorage position into the store once", async () => {
+    const s = storage(JSON.stringify(r(18, 10)));
+    const saved: unknown[] = [];
+    const pos = await migratePosition(null, s, async (ref) => void saved.push(ref));
+    expect(pos).toEqual(r(18, 10));
+    expect(saved).toEqual([r(18, 10)]);
+    expect(s.items.size).toBe(0);
+    // Next start: nothing left to move.
+    expect(await migratePosition(r(18, 10), s, async () => {})).toEqual(r(18, 10));
+  });
+
+  it("prefers the store and drops the old value", async () => {
+    const s = storage(JSON.stringify(r(1, 1)));
+    expect(await migratePosition(r(2, 255), s, async () => {})).toEqual(r(2, 255));
+    expect(s.items.size).toBe(0);
+  });
+
+  it("keeps the old value when saving fails, and ignores garbage", async () => {
+    const s = storage(JSON.stringify(r(3, 7)));
+    const pos = await migratePosition(null, s, () => Promise.reject(new Error("no store")));
+    expect(pos).toEqual(r(3, 7));
+    expect(s.items.size).toBe(1);
+    expect(await migratePosition(null, storage("{oops"), async () => {})).toBeNull();
+    expect(await migratePosition(null, undefined, async () => {})).toBeNull();
   });
 });

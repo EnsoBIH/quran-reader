@@ -15,8 +15,15 @@ path = "src/bin/quran.rs"
 name = "core"
 harness = false
 
+[features]
+# The local study store (SQLite) and study export/import. The app enables it; the CLI and
+# the data build don't need it.
+store = ["dep:rusqlite", "dep:serde_json"]
+
 [dependencies]
 serde.workspace = true
+rusqlite = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 criterion.workspace = true
