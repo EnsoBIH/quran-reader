@@ -29,6 +29,9 @@ The text is Tanzil's Uthmani text 1.0.2, unmodified (DECISIONS.md D-004, D-009),
 Amiri Quran (D-005). On each of the three screenshot sheets, and in the app at two sizes:
 
 - [ ] Letters join correctly; no isolated forms inside a word, no gaps, no boxes or `◌`.
+- [ ] Known on Linux (DECISIONS.md D-034): in WebKitGTK some words — ٱللَّهُ, عَلَىٰ,
+      إِلَىٰ … — are drawn below the line. Check the real app on Linux and say whether the
+      Linux build can ship with it.
 - [ ] Every haraka, shadda, sukun and tanwin sits on its own letter, not on its neighbour,
       and none collides with the line above or below.
 - [ ] Superscript alif (ٰ), small waw and ya (ۥ ۦ), small high letters (ۜ ۨ), the iqlab
