@@ -58,6 +58,7 @@ jobs:
     # a new image (or Playwright version) changes fonts and engines, and then the baselines
     # in apps/desktop/e2e/screenshots/ are regenerated (docs/release.md).
     name: Arabic rendering (${{ matrix.engine }})
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:

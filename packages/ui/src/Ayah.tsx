@@ -45,10 +45,9 @@ export function Ayah({
       style={{ fontSize: "var(--reader-arabic-size)" }}
     >
       <Marked text={text} ranges={marks} />{" "}
-      <span aria-hidden="true">
-        {END_OF_AYAH}
-        {toArabicIndic(verseRef.ayah)}
-      </span>
+      {/* One text node: WebKit shapes each node on its own, and the font can only draw the
+          number inside the sign when both are shaped together. */}
+      <span aria-hidden="true">{`${END_OF_AYAH}${toArabicIndic(verseRef.ayah)}`}</span>
       <span className="sr-only">({id})</span>
     </p>
   );

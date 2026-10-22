@@ -83,10 +83,32 @@ test("tashkeel attaches to its letter without taking space", async ({ page }) =>
 
 test("the end-of-ayah sign encloses its number", async ({ page }) => {
   // Amiri Quran draws the digits after U+06DD inside the sign, so the pair is as wide as
-  // the sign alone (this is how the reader numbers verses).
+  // the sign alone.
   const [sign = 0, digits = 0, numbered = 0] = await widths(page, ["۝", "٢٨٦", "۝٢٨٦"]);
   expect(digits).toBeGreaterThan(0);
   expect(numbered).toBeLessThanOrEqual(sign + 1);
+});
+
+test("verse numbers are drawn inside the end-of-ayah sign", async ({ page }) => {
+  // The same, measured on the verse numbers as the reader renders them: WebKit shapes each
+  // DOM text node on its own, so sign and digits in two nodes were drawn side by side.
+  const tooWide = await page.evaluate(() => {
+    const wide: string[] = [];
+    for (const number of document.querySelectorAll<HTMLElement>(
+      'article p[lang="ar"] > span[aria-hidden="true"]',
+    )) {
+      const sign = document.createElement("span");
+      sign.textContent = "۝";
+      number.after(sign);
+      const signWidth = sign.getBoundingClientRect().width;
+      sign.remove();
+      if (number.getBoundingClientRect().width > signWidth + 1) {
+        wide.push(number.closest("article")?.dataset.ref ?? "?");
+      }
+    }
+    return wide;
+  });
+  expect(tooWide).toEqual([]);
 });
 
 test("verses run right to left", async ({ page }) => {
