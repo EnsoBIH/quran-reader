@@ -10,10 +10,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "biome check .",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p e2e/tsconfig.json",
     "tauri": "tauri",
     "tauri:build": "tauri build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test -c e2e"
   },
   "dependencies": {
     "@fontsource/amiri-quran": "catalog:",
@@ -24,9 +25,11 @@
     "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@quran-reader/config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@tauri-apps/cli": "catalog:",
+    "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",

@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./theme.css": "./src/theme.css"
+    "./theme.css": "./src/theme.css",
+    "./quran-font.css": "./src/quran-font.css"
   },
   "scripts": {
     "lint": "biome check .",
@@ -14,6 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource/amiri-quran": "catalog:",
     "@quran-reader/types": "workspace:*"
   },
   "peerDependencies": {
