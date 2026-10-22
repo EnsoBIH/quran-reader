@@ -21,6 +21,7 @@
 //! unmodified text, so the UI highlights without touching the text. The normalized forms
 //! are built at run time (DECISIONS.md D-015) and never leave this module.
 
+use std::borrow::Cow;
 use std::fmt;
 use std::ops::Range;
 
@@ -85,21 +86,48 @@ impl<'a> SearchIndex<'a> {
     pub fn new(quran: Quran<'a>) -> Self {
         Self {
             quran,
-            texts: vec![SearchText::new(QURAN_TEXT, quran.verses().collect())],
+            texts: vec![SearchText::new(
+                QURAN_TEXT,
+                quran.verses().map(Cow::Borrowed).collect(),
+            )],
         }
     }
 
     /// Adds a further searchable text, e.g. a translation: one string per verse in Quran
     /// order. Its hits carry `id`.
+    /// A text with the same id is replaced.
     pub fn add_text(&mut self, id: &str, verses: Vec<&'a str>) -> Result<(), SearchError> {
+        self.add(id, verses.into_iter().map(Cow::Borrowed).collect())
+    }
+
+    /// Like [`Self::add_text`], for a text that lives as long as the index only (e.g. a
+    /// translation the user imported while the app runs).
+    pub fn add_owned_text(&mut self, id: &str, verses: Vec<String>) -> Result<(), SearchError> {
+        self.add(id, verses.into_iter().map(Cow::Owned).collect())
+    }
+
+    fn add(&mut self, id: &str, verses: Vec<Cow<'a, str>>) -> Result<(), SearchError> {
         if verses.len() != usize::from(AYAH_COUNT) {
             return Err(SearchError::VerseCount {
                 text: id.to_owned(),
                 count: verses.len(),
             });
         }
+        self.remove_text(id);
         self.texts.push(SearchText::new(id, verses));
         Ok(())
+    }
+
+    /// Removes an added text; returns whether it was there. The Arabic stays.
+    pub fn remove_text(&mut self, id: &str) -> bool {
+        let before = self.texts.len();
+        self.texts.retain(|t| t.id == QURAN_TEXT || t.id != id);
+        self.texts.len() != before
+    }
+
+    /// Ids of the searchable texts, the Arabic first.
+    pub fn texts(&self) -> impl Iterator<Item = &str> {
+        self.texts.iter().map(|t| t.id.as_str())
     }
 
     /// Verses matching `query`, in Quran order: the count of all of them and the first
@@ -215,14 +243,14 @@ impl<'a> SearchIndex<'a> {
 struct SearchText<'a> {
     id: String,
     /// Unmodified verse strings, for mapping matches back.
-    verses: Vec<&'a str>,
+    verses: Vec<Cow<'a, str>>,
     normalized: String,
     /// Byte offset of each verse in `normalized`, then its length.
     starts: Vec<u32>,
 }
 
 impl<'a> SearchText<'a> {
-    fn new(id: &str, verses: Vec<&'a str>) -> Self {
+    fn new(id: &str, verses: Vec<Cow<'a, str>>) -> Self {
         let size: usize = verses.iter().map(|v| v.len()).sum();
         let mut normalized = String::with_capacity(size);
         let mut starts = Vec::with_capacity(verses.len() + 1);
@@ -280,7 +308,7 @@ impl<'a> SearchText<'a> {
 
     /// Where `terms` occur in verse `v`, as ranges of its unmodified text.
     fn ranges(&self, v: usize, terms: &[Term]) -> Vec<TextRange> {
-        let original = self.verses[v];
+        let original = &*self.verses[v];
         let (mut normalized, mut origin) = (String::new(), Vec::new());
         normalize::normalize(original, &mut normalized, Some(&mut origin));
         debug_assert_eq!(normalized, self.verse(v));
@@ -868,5 +896,49 @@ mod tests {
                 count: 3
             })
         );
+    }
+
+    #[test]
+    fn owned_texts_can_be_added_replaced_and_removed() {
+        let mut index = SearchIndex::new(*crate::quran().unwrap());
+        let mut verses: Vec<String> = (0..AYAH_COUNT).map(|i| format!("w{i}")).collect();
+        verses[261] = "synthetic zebra".into();
+        index.add_owned_text("user.a", verses.clone()).unwrap();
+        let hit = |index: &SearchIndex<'_>, q: &str| {
+            index
+                .search(q, 10)
+                .unwrap()
+                .hits
+                .iter()
+                .map(|h| (h.verse_ref, h.matches[0].text.clone()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            hit(&index, "zebra"),
+            [(VerseRef::new(2, 255), "user.a".to_owned())]
+        );
+        // Same id again: replaced, not added twice.
+        verses[261] = "synthetic okapi".into();
+        index.add_owned_text("user.a", verses).unwrap();
+        assert!(hit(&index, "zebra").is_empty());
+        assert_eq!(hit(&index, "okapi").len(), 1);
+        assert_eq!(index.texts().collect::<Vec<_>>(), [QURAN_TEXT, "user.a"]);
+        assert!(index.remove_text("user.a"));
+        assert!(!index.remove_text("user.a"));
+        assert!(!index.remove_text(QURAN_TEXT));
+        assert!(hit(&index, "okapi").is_empty());
+    }
+
+    #[test]
+    fn a_hit_in_arabic_and_translation_lists_both() {
+        let mut verses: Vec<String> = (0..AYAH_COUNT).map(|i| format!("w{i}")).collect();
+        verses[0] = "synthetic name".into();
+        let index = with_synthetic(&verses);
+        // 1:1 holds the Arabic word, 1:2 does not; the translation matches 1:1 only.
+        let r = index.search("رحمن", 3).unwrap();
+        assert_eq!(r.hits[0].matches.len(), 1);
+        let r = index.search("name", 3).unwrap();
+        assert_eq!(r.total, 1);
+        assert_eq!(r.hits[0].matches[0].text, "test");
     }
 }

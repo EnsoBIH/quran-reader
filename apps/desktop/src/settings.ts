@@ -1,4 +1,4 @@
-import type { ReaderView, Theme } from "@quran-reader/types";
+import type { ReaderView, Theme, TranslationInfo } from "@quran-reader/types";
 
 // Reader settings, kept in localStorage until the SQLite store arrives (Phase 5).
 
@@ -6,14 +6,20 @@ export interface Settings {
   /** `system` follows the OS light/dark setting. */
   theme: Theme | "system";
   view: ReaderView;
+  /** The view with a translation that T (or the top-bar button) switches back to. */
+  translatedView: TranslatedView;
   /** Font sizes and line measure in rem. */
   arabicSize: number;
   translationSize: number;
   measure: number;
+  /** Id of the translation shown beside the Arabic; `null` until the user picks one. */
+  translation: string | null;
 }
 
 export const THEMES: Settings["theme"][] = ["system", "light", "sepia", "dark"];
 export const VIEWS: ReaderView[] = ["arabic", "stacked", "columns"];
+export type TranslatedView = Exclude<ReaderView, "arabic">;
+const TRANSLATED_VIEWS: TranslatedView[] = ["stacked", "columns"];
 
 export const LIMITS = {
   arabicSize: { min: 1.25, max: 3.5, step: 0.125 },
@@ -23,10 +29,13 @@ export const LIMITS = {
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
-  view: "arabic",
+  // A translation is bundled, so it shows from the first start (DECISIONS.md D-020).
+  view: "stacked",
+  translatedView: "stacked",
   arabicSize: 1.875,
   translationSize: 1.0625,
   measure: 42,
+  translation: null,
 };
 
 const KEY = "quran-reader:settings";
@@ -45,9 +54,11 @@ export function parseSettings(raw: unknown): Settings {
   return {
     theme: pick(o.theme, THEMES, DEFAULT_SETTINGS.theme),
     view: pick(o.view, VIEWS, DEFAULT_SETTINGS.view),
+    translatedView: pick(o.translatedView, TRANSLATED_VIEWS, DEFAULT_SETTINGS.translatedView),
     arabicSize: size("arabicSize"),
     translationSize: size("translationSize"),
     measure: size("measure"),
+    translation: typeof o.translation === "string" && o.translation !== "" ? o.translation : null,
   };
 }
 
@@ -81,4 +92,33 @@ export function applySettings(s: Settings, root: HTMLElement) {
   root.style.setProperty("--reader-arabic-size", `${s.arabicSize}rem`);
   root.style.setProperty("--reader-translation-size", `${s.translationSize}rem`);
   root.style.setProperty("--reader-measure", `${s.measure}rem`);
+}
+
+/** Picks a view; a view with a translation is also remembered for {@link toggleTranslation}. */
+export function withView(s: Settings, view: ReaderView): Settings {
+  return view === "arabic" ? { ...s, view } : { ...s, view, translatedView: view };
+}
+
+/** T: hides the translation, or shows it again in the view it was last shown in. */
+export function toggleTranslation(s: Settings): Settings {
+  return withView(s, s.view === "arabic" ? s.translatedView : "arabic");
+}
+
+/**
+ * The translation to show: the chosen one if it is installed, otherwise the first in the
+ * user's language (`languages`, e.g. `navigator.languages`), otherwise the first installed.
+ */
+export function pickTranslation(
+  installed: readonly TranslationInfo[],
+  chosen: string | null,
+  languages: readonly string[] = [],
+): TranslationInfo | null {
+  const found = installed.find((t) => t.id === chosen);
+  if (found) return found;
+  for (const tag of languages) {
+    const lang = tag.toLowerCase().split("-")[0];
+    const match = installed.find((t) => t.language === lang);
+    if (match) return match;
+  }
+  return installed[0] ?? null;
 }

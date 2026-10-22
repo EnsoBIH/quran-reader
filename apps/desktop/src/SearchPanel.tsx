@@ -1,15 +1,19 @@
-import type { SearchHit } from "@quran-reader/types";
+import type { SearchHit, TranslationInfo } from "@quran-reader/types";
 import { Marked } from "@quran-reader/ui";
 import { useEffect, useRef, useState } from "react";
 import * as core from "./core.ts";
 import type { Mushaf } from "./mushaf.ts";
-import { arabicRanges, snippet } from "./search.ts";
+import { QURAN_TEXT, snippet } from "./search.ts";
 
-// ⌘F: full-text search beside the reader. Matching and highlight ranges come from
-// quran-core (`search`); this lists the hits and jumps to them.
+// ⌘F: full-text search beside the reader, over the Arabic and every installed translation.
+// Matching and highlight ranges come from quran-core (`search`); this lists the hits and
+// jumps to them.
 
 interface SearchPanelProps {
   mushaf: Mushaf;
+  translations: TranslationInfo[];
+  /** Loaded translation texts, for the snippets of translation matches. */
+  texts: ReadonlyMap<string, string[]>;
   query: string;
   onQuery: (query: string) => void;
   /** Changes whenever ⌘F is pressed, to focus the input again. */
@@ -25,6 +29,8 @@ const EXAMPLES = ["رحمن", '"الحمد لله"', "الله -رحيم", "نو
 
 export function SearchPanel({
   mushaf,
+  translations,
+  texts,
   query,
   onQuery,
   focusKey,
@@ -146,6 +152,8 @@ export function SearchPanel({
               <li key={hit.index} data-hit={i}>
                 <Result
                   mushaf={mushaf}
+                  translations={translations}
+                  texts={texts}
                   hit={hit}
                   selected={i === selected}
                   active={hit.index === active}
@@ -173,19 +181,31 @@ export function SearchPanel({
 
 function Result({
   mushaf,
+  translations,
+  texts,
   hit,
   selected,
   active,
   onClick,
 }: {
   mushaf: Mushaf;
+  translations: TranslationInfo[];
+  texts: ReadonlyMap<string, string[]>;
   hit: SearchHit;
   selected: boolean;
   active: boolean;
   onClick: () => void;
 }) {
   const s = mushaf.surahs[hit.ref.surah - 1];
-  const part = snippet(mushaf.verses[hit.index] ?? "", arabicRanges(hit));
+  // Every text that matched: the Arabic first, then the translations in settings order.
+  const parts = hit.matches.map((m) => {
+    if (m.text === QURAN_TEXT) {
+      return { id: m.text, part: snippet(mushaf.verses[hit.index] ?? "", m.ranges) };
+    }
+    const t = translations.find((x) => x.id === m.text);
+    const verse = texts.get(m.text)?.[hit.index];
+    return { id: m.text, info: t, part: verse === undefined ? null : snippet(verse, m.ranges) };
+  });
   return (
     <button
       type="button"
@@ -198,11 +218,28 @@ function Result({
           {s?.nameLatin ?? `Surah ${hit.ref.surah}`} {hit.ref.surah}:{hit.ref.ayah}
         </span>
       </span>
-      <span dir="rtl" lang="ar" className="font-quran text-ink text-xl leading-[2.1]">
-        {part.cutStart && <span className="text-muted">… </span>}
-        <Marked text={part.text} ranges={part.ranges} />
-        {part.cutEnd && <span className="text-muted"> …</span>}
-      </span>
+      {parts.map(({ id, info, part }) =>
+        id === QURAN_TEXT && part ? (
+          <span key={id} dir="rtl" lang="ar" className="font-quran text-ink text-xl leading-[2.1]">
+            {part.cutStart && <span className="text-muted">… </span>}
+            <Marked text={part.text} ranges={part.ranges} />
+            {part.cutEnd && <span className="text-muted"> …</span>}
+          </span>
+        ) : (
+          <span key={id} lang={info?.language} dir="auto" className="text-ink/85 text-sm">
+            <span className="mr-1.5 text-muted text-xs">{info?.name ?? id}</span>
+            {part ? (
+              <>
+                {part.cutStart && <span className="text-muted">… </span>}
+                <Marked text={part.text} ranges={part.ranges} />
+                {part.cutEnd && <span className="text-muted"> …</span>}
+              </>
+            ) : (
+              <span className="text-muted">…</span>
+            )}
+          </span>
+        ),
+      )}
     </button>
   );
 }
@@ -211,7 +248,10 @@ function Help({ onExample }: { onExample: (q: string) => void }) {
   const row = "flex justify-between gap-4";
   return (
     <div className="flex flex-col gap-3 px-4 py-3 text-muted text-sm">
-      <p>Searches the Arabic text, ignoring tashkeel and letter variants (أ إ آ ٱ, ى/ي, ة/ه).</p>
+      <p>
+        Searches the Arabic text, ignoring tashkeel and letter variants (أ إ آ ٱ, ى/ي, ة/ه), and
+        every installed translation (case and accents ignored, words match at their start).
+      </p>
       <dl className="flex flex-col gap-1">
         <div className={row}>
           <dt>All words</dt>

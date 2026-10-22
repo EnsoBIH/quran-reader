@@ -18,3 +18,12 @@ id = "tanzil-metadata"
 url = "https://tanzil.net/res/text/metadata/quran-data.xml"
 sha256 = "8867c1d88191472adec9db694b3cd9f135b1a2ef580574d32cf888dcb22c5c7a"
 license = "CC BY, (C) 2008-2009 Tanzil.info (as declared in the file)"
+
+# English translation by Marmaduke Pickthall (1930), public domain (LICENSES/PICKTHALL.txt,
+# review in LICENSES/README.md). The file holds three translations; `cargo xtask build`
+# takes only Pickthall's verses (the `P:` paragraphs), one per verse of the Kufan count.
+[[source]]
+id = "gutenberg-16955"
+url = "https://www.gutenberg.org/cache/epub/16955/pg16955.txt"
+sha256 = "3b96fa3ad318ab9d91db53b25100d5169fafe3a1ecb993e7c36ffff55bf9d8bc"
+license = "Public domain (Pickthall 1930); only the P: verses are used"

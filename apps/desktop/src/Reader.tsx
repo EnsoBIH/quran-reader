@@ -30,6 +30,21 @@ import type { Settings } from "./settings.ts";
 // or shorter than estimated, the scroll position moves by the difference, so the text being
 // read never jumps.
 
+export interface ShownTranslation {
+  id: string;
+  /** BCP 47 tag, for `lang` (fonts, hyphenation, screen readers). */
+  language: string;
+  /** All 6,236 verses, unmodified. */
+  verses: string[];
+}
+
+/** Search matches in one verse: in the Arabic, and in the translation shown. */
+export interface VerseMarks {
+  index: number;
+  arabic: TextRange[];
+  translation: TextRange[];
+}
+
 export interface ReaderHandle {
   /** Puts `row` at the top of the viewport. */
   scrollToRow(row: number): void;
@@ -42,8 +57,10 @@ interface ReaderProps {
   settings: Settings;
   /** Row shown first. */
   initialRow: number;
+  /** Translation shown in the stacked and two-column views, if one is installed. */
+  translation?: ShownTranslation | null;
   /** Search matches to highlight in one verse (global verse index). */
-  marks?: { index: number; ranges: TextRange[] } | null;
+  marks?: VerseMarks | null;
   /** Called with the row at the top of the viewport whenever it changes. */
   onAnchor: (row: number) => void;
   /** Called once, after the first frame with text has been painted. */
@@ -55,12 +72,15 @@ interface ReaderProps {
 const OVERSCAN = 800;
 /** Average advance of one UTF-16 unit of Uthmani text (marks included) per font pixel. */
 const ARABIC_ADVANCE = 0.27;
+/** Average advance of one character of Latin-script translation text per font pixel. */
+const LATIN_ADVANCE = 0.5;
 const COLUMN_GAP = 32;
 
 export function Reader({
   mushaf,
   settings,
   initialRow,
+  translation,
   marks,
   onAnchor,
   onFirstPaint,
@@ -168,7 +188,14 @@ export function Reader({
     const el = scroller.current;
     if (!el || width === 0) return;
     const px = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-    const estimate = estimator(mushaf, view, arabicSize * px, translationSize * px, width);
+    const estimate = estimator(
+      mushaf,
+      view,
+      arabicSize * px,
+      translationSize * px,
+      width,
+      translation?.verses,
+    );
     const h = heights.current;
     if (!h) {
       heights.current = new Heights(mushaf.rows.length, estimate);
@@ -181,7 +208,7 @@ export function Reader({
     for (const [node, r] of mounted.current) h.set(r, node.getBoundingClientRect().height);
     el.scrollTop = h.offset(row) + within * h.size(row);
     update();
-  }, [mushaf, view, arabicSize, translationSize, width, initialRow, jump, update]);
+  }, [mushaf, view, arabicSize, translationSize, width, translation, initialRow, jump, update]);
 
   useLayoutEffect(() => {
     if (!first.current || range[1] === 0) return;
@@ -217,7 +244,8 @@ export function Reader({
             row={row}
             view={view}
             observe={observe}
-            marks={marks && mushaf.rows[row] === marks.index ? marks.ranges : undefined}
+            translation={translation}
+            marks={marks && mushaf.rows[row] === marks.index ? marks : undefined}
           />
         ))}
         <div style={{ height: h ? h.total() - h.offset(end) : 0 }} />
@@ -231,10 +259,11 @@ interface RowProps {
   row: number;
   view: ReaderView;
   observe: RefCallback<HTMLDivElement>;
-  marks?: TextRange[];
+  translation?: ShownTranslation | null;
+  marks?: VerseMarks;
 }
 
-const Row = memo(function Row({ mushaf, row, view, observe, marks }: RowProps) {
+const Row = memo(function Row({ mushaf, row, view, observe, translation, marks }: RowProps) {
   const r = mushaf.rows[row] ?? 0;
   if (r < 0) {
     const surah = mushaf.surahs[-r - 1];
@@ -274,8 +303,11 @@ const Row = memo(function Row({ mushaf, row, view, observe, marks }: RowProps) {
         verseRef={refAt(mushaf, r)}
         text={mushaf.verses[r] ?? ""}
         view={view}
+        translation={translation?.verses[r]}
+        translationLang={translation?.language}
         meta={meta.length > 0 ? meta.join(" · ") : undefined}
-        marks={marks}
+        marks={marks?.arabic}
+        translationMarks={marks?.translation}
       />
     </div>
   );
@@ -288,11 +320,20 @@ function estimator(
   arabicPx: number,
   translationPx: number,
   width: number,
+  translations?: string[],
 ): (row: number) => number {
   const textWidth = Math.max(width - 48, 100);
   const arabicWidth = view === "columns" ? (textWidth - COLUMN_GAP) / 2 : textWidth;
   const line = arabicPx * 2.2;
-  const translation = translationPx * 1.625;
+  const translationLine = translationPx * 1.625;
+  // The reference ("2:255 ") comes first in the slot.
+  const translationLines = (r: number) =>
+    Math.max(
+      1,
+      Math.ceil(
+        (((translations?.[r]?.length ?? 0) + 8) * LATIN_ADVANCE * translationPx) / arabicWidth,
+      ),
+    );
   return (row) => {
     const r = m.rows[row] ?? 0;
     if (r < 0) {
@@ -302,7 +343,8 @@ function estimator(
     const length = (m.verses[r]?.length ?? 0) + 3;
     const lines = Math.max(1, Math.ceil((length * ARABIC_ADVANCE * arabicPx) / arabicWidth));
     let size = 41 + lines * line;
-    if (view === "stacked") size += 12 + translation;
+    if (view === "stacked") size += 12 + translationLines(r) * translationLine;
+    if (view === "columns") size = Math.max(size, 41 + translationLines(r) * translationLine);
     const starts = m.starts[r] ?? 0;
     if (starts & (STARTS_JUZ | STARTS_QUARTER)) size += 36;
     if (starts & STARTS_PAGE || m.sajdas.has(r)) size += 28;

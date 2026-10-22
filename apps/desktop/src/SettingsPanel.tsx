@@ -1,10 +1,14 @@
-import type { ReaderView } from "@quran-reader/types";
-import { useEffect, useRef } from "react";
-import { clampSize, LIMITS, type Settings, THEMES, VIEWS } from "./settings.ts";
+import type { ReaderView, TranslationInfo } from "@quran-reader/types";
+import { useEffect, useRef, useState } from "react";
+import { clampSize, LIMITS, type Settings, THEMES, VIEWS, withView } from "./settings.ts";
+import { type Library, languageName, languages } from "./translations.ts";
 
 interface SettingsPanelProps {
   settings: Settings;
   onChange: (s: Settings) => void;
+  library: Library;
+  /** The translation in view (the chosen one, or the fallback). */
+  shown: TranslationInfo | null;
   onClose: () => void;
 }
 
@@ -14,7 +18,7 @@ const VIEW_LABEL: Record<ReaderView, string> = {
   columns: "Columns",
 };
 
-export function SettingsPanel({ settings, onChange, onClose }: SettingsPanelProps) {
+export function SettingsPanel({ settings, onChange, library, shown, onClose }: SettingsPanelProps) {
   const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,13 +75,13 @@ export function SettingsPanel({ settings, onChange, onClose }: SettingsPanelProp
         options={VIEWS}
         value={settings.view}
         label={(v) => VIEW_LABEL[v]}
-        onPick={(view) => onChange({ ...settings, view })}
+        onPick={(view) => onChange(withView(settings, view))}
       />
-      {settings.view !== "arabic" && (
-        <p className="-mt-2 text-muted text-xs">
-          No translation is installed yet; importing one comes in a later version.
-        </p>
-      )}
+      <TranslationChoice
+        library={library}
+        shown={shown}
+        onPick={(translation) => onChange({ ...settings, translation })}
+      />
       {size("arabicSize", "Arabic size")}
       {size("translationSize", "Translation size")}
       {size("measure", "Line width")}
@@ -114,6 +118,128 @@ function Choice<T extends string>({
           </button>
         ))}
       </div>
+    </fieldset>
+  );
+}
+
+/** Language, translation, import and removal of imports. */
+function TranslationChoice({
+  library,
+  shown,
+  onPick,
+}: {
+  library: Library;
+  shown: TranslationInfo | null;
+  onPick: (id: string) => void;
+}) {
+  const { installed } = library;
+  const [language, setLanguage] = useState(shown?.language ?? "");
+  const [status, setStatus] = useState<{ error: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const file = useRef<HTMLInputElement>(null);
+  const langs = languages(installed);
+  const lang = langs.includes(language) ? language : (shown?.language ?? langs[0] ?? "");
+  const inLanguage = installed.filter((t) => t.language === lang);
+  const field = "rounded border border-rule bg-paper px-1.5 py-1";
+
+  const onFile = async (f: File | undefined) => {
+    if (!f) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const info = await library.importFile(f);
+      setLanguage(info.language);
+      onPick(info.id);
+      setStatus({ error: false, text: `Imported “${info.name}” (all 6,236 verses).` });
+    } catch (e) {
+      setStatus({ error: true, text: `Not imported: ${String(e)}` });
+    } finally {
+      setBusy(false);
+      if (file.current) file.current.value = "";
+    }
+  };
+
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-1">Translation</legend>
+      {installed.length === 0 ? (
+        <p className="text-muted text-xs">No translation is installed.</p>
+      ) : (
+        <div className="flex gap-1">
+          <select
+            aria-label="Translation language"
+            value={lang}
+            onChange={(e) => {
+              setLanguage(e.target.value);
+              const first = installed.find((t) => t.language === e.target.value);
+              if (first) onPick(first.id);
+            }}
+            className={`${field} w-24`}
+          >
+            {langs.map((l) => (
+              <option key={l} value={l}>
+                {languageName(l)}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Translation"
+            value={shown?.language === lang ? shown.id : ""}
+            onChange={(e) => onPick(e.target.value)}
+            className={`${field} min-w-0 flex-1`}
+          >
+            {shown?.language !== lang && <option value="">Choose…</option>}
+            {inLanguage.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+                {t.bundled ? "" : " (imported)"}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="flex items-center gap-2 text-xs">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => file.current?.click()}
+          className="rounded border border-rule px-2 py-1 text-muted hover:text-ink disabled:opacity-40"
+        >
+          {busy ? "Importing…" : "Import…"}
+        </button>
+        {shown && !shown.bundled && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              library
+                .remove(shown.id)
+                .then(() => setStatus({ error: false, text: `Removed “${shown.name}”.` }))
+                .catch((e: unknown) => setStatus({ error: true, text: String(e) }));
+            }}
+            className="rounded px-2 py-1 text-muted hover:text-ink disabled:opacity-40"
+          >
+            Remove “{shown.name}”
+          </button>
+        )}
+        <input
+          ref={file}
+          type="file"
+          accept=".txt,.xml,text/plain,application/xml,text/xml"
+          className="hidden"
+          aria-label="Translation file"
+          onChange={(e) => onFile(e.target.files?.[0])}
+        />
+      </div>
+      {status && (
+        <p role="status" className={`text-xs ${status.error ? "text-accent" : "text-muted"}`}>
+          {status.text}
+        </p>
+      )}
+      <p className="text-muted text-xs">
+        Import a translation you downloaded yourself, e.g. from tanzil.net/trans (plain text or
+        XML). It stays on this computer.
+      </p>
     </fieldset>
   );
 }

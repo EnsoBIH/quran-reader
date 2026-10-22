@@ -7,7 +7,12 @@ export const QURAN_TEXT = "quran";
 
 /** Matched ranges of the Arabic text of a hit. */
 export function arabicRanges(hit: SearchHit): TextRange[] {
-  return hit.matches.find((m) => m.text === QURAN_TEXT)?.ranges ?? [];
+  return textRanges(hit, QURAN_TEXT);
+}
+
+/** Matched ranges of one text (the Arabic or a translation id) of a hit. */
+export function textRanges(hit: SearchHit, text: string): TextRange[] {
+  return hit.matches.find((m) => m.text === text)?.ranges ?? [];
 }
 
 export interface Snippet {
