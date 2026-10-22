@@ -2,6 +2,7 @@ import type { ReaderView, TranslationInfo } from "@quran-reader/types";
 import { useEffect, useRef, useState } from "react";
 import { clampSize, LIMITS, type Settings, THEMES, VIEWS, withView } from "./settings.ts";
 import { type Library, languageName, languages } from "./translations.ts";
+import { type Updates, updateStatus } from "./updates.ts";
 
 interface SettingsPanelProps {
   settings: Settings;
@@ -9,6 +10,9 @@ interface SettingsPanelProps {
   library: Library;
   /** The translation in view (the chosen one, or the fallback). */
   shown: TranslationInfo | null;
+  updates: Updates;
+  /** The app version, null in the browser preview. */
+  version: string | null;
   onClose: () => void;
 }
 
@@ -18,7 +22,15 @@ const VIEW_LABEL: Record<ReaderView, string> = {
   columns: "Columns",
 };
 
-export function SettingsPanel({ settings, onChange, library, shown, onClose }: SettingsPanelProps) {
+export function SettingsPanel({
+  settings,
+  onChange,
+  library,
+  shown,
+  updates,
+  version,
+  onClose,
+}: SettingsPanelProps) {
   const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -85,7 +97,72 @@ export function SettingsPanel({ settings, onChange, library, shown, onClose }: S
       {size("arabicSize", "Arabic size")}
       {size("translationSize", "Translation size")}
       {size("measure", "Line width")}
+      <UpdateChoice
+        updates={updates}
+        version={version}
+        auto={settings.checkUpdates}
+        onAuto={(checkUpdates) => onChange({ ...settings, checkUpdates })}
+      />
     </div>
+  );
+}
+
+/** Automatic check on or off, a manual check, and its result. */
+function UpdateChoice({
+  updates,
+  version,
+  auto,
+  onAuto,
+}: {
+  updates: Updates;
+  version: string | null;
+  auto: boolean;
+  onAuto: (on: boolean) => void;
+}) {
+  const { state } = updates;
+  const busy = state.kind === "checking" || state.kind === "installing";
+  const status = updateStatus(state, version);
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-1">Updates</legend>
+      <label className="flex items-center gap-2 text-xs">
+        <input
+          type="checkbox"
+          checked={auto}
+          onChange={(e) => onAuto(e.target.checked)}
+          className="accent-accent"
+        />
+        Check for a new version at start-up
+      </label>
+      <div className="flex items-center gap-2 text-xs">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={updates.check}
+          className="rounded border border-rule px-2 py-1 text-muted hover:text-ink disabled:opacity-40"
+        >
+          Check now
+        </button>
+        {state.kind === "available" && (
+          <button
+            type="button"
+            onClick={() => updates.install(state.update)}
+            className="rounded bg-accent px-2 py-1 text-paper"
+          >
+            Install {state.update.version}
+          </button>
+        )}
+      </div>
+      {status && (
+        <p role="status" className="text-muted text-xs">
+          {status}
+        </p>
+      )}
+      <p className="text-muted text-xs">
+        Only asks GitHub Releases for the latest version number. Your notes and reading stay on this
+        computer.
+      </p>
+    </fieldset>
   );
 }
 

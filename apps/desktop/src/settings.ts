@@ -14,6 +14,8 @@ export interface Settings {
   measure: number;
   /** Id of the translation shown beside the Arabic; `null` until the user picks one. */
   translation: string | null;
+  /** Ask GitHub Releases for a newer version at start-up (DECISIONS.md D-027). */
+  checkUpdates: boolean;
 }
 
 export const THEMES: Settings["theme"][] = ["system", "light", "sepia", "dark"];
@@ -36,6 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
   translationSize: 1.0625,
   measure: 42,
   translation: null,
+  checkUpdates: true,
 };
 
 const KEY = "quran-reader:settings";
@@ -59,6 +62,8 @@ export function parseSettings(raw: unknown): Settings {
     translationSize: size("translationSize"),
     measure: size("measure"),
     translation: typeof o.translation === "string" && o.translation !== "" ? o.translation : null,
+    checkUpdates:
+      typeof o.checkUpdates === "boolean" ? o.checkUpdates : DEFAULT_SETTINGS.checkUpdates,
   };
 }
 

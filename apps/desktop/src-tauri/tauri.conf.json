@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Quran Reader",
-  "version": "0.0.0",
   "identifier": "io.github.quranreader.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev:vite",
@@ -26,7 +25,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["app", "dmg", "nsis", "msi", "deb", "rpm", "appimage"],
     "category": "Education",
     "shortDescription": "A fast, beautifully typeset Quran reader",
     "copyright": "MIT · Quran text: Tanzil.net (CC BY 3.0)",
@@ -36,6 +35,29 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true,
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "linux": {
+      "deb": {
+        "section": "education"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": ["https://github.com/EnsoBIH/quran-reader/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

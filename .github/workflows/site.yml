@@ -1,0 +1,76 @@
+name: Site
+
+# The landing page (apps/web) on GitHub Pages, served from the `gh-pages` branch: main at
+# https://ensobih.github.io/quran-reader/, every pull request that changes the site at
+# …/quran-reader/pr-preview/pr-<number>/ until it is closed (DECISIONS.md D-029).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/site.yml
+      - apps/web/**
+      - packages/types/**
+      - packages/ui/**
+      - pnpm-lock.yaml
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+    paths:
+      - .github/workflows/site.yml
+      - apps/web/**
+      - packages/types/**
+      - packages/ui/**
+      - pnpm-lock.yaml
+  workflow_dispatch:
+
+# One deployment at a time per ref; never cancelled halfway through a push to gh-pages.
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  deploy:
+    name: ${{ github.event_name == 'pull_request' && 'Preview' || 'Deploy' }}
+    runs-on: ubuntu-latest
+    # Pull requests from forks get a read-only token, so they get no preview.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      REPO: ${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v5
+      - if: github.event.action != 'closed'
+        uses: pnpm/action-setup@v4
+      - if: github.event.action != 'closed'
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - if: github.event.action != 'closed'
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        if: github.event.action != 'closed'
+        run: pnpm --filter @quran-reader/web build
+        env:
+          SITE_URL: https://${{ github.repository_owner }}.github.io
+          SITE_BASE: /${{ env.REPO }}/${{ github.event_name == 'pull_request' && format('pr-preview/pr-{0}/', github.event.number) || '' }}
+      - name: Deploy
+        if: github.event_name != 'pull_request'
+        uses: JamesIves/github-pages-deploy-action@fa24774553152dd7873cd16ebd8d959b010c5445 # v4.9.0
+        with:
+          folder: apps/web/dist
+          branch: gh-pages
+          # Keep the previews, and rebase instead of force-pushing so they survive.
+          clean-exclude: pr-preview/
+          force: false
+      - name: Preview
+        if: github.event_name == 'pull_request'
+        uses: rossjrw/pr-preview-action@ffa7509e91a3ec8dfc2e5536c4d5c1acdf7a6de9 # v1.8.1
+        with:
+          source-dir: apps/web/dist
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          qr-code: false

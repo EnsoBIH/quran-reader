@@ -1,0 +1,51 @@
+# Opened by "Report a problem" in the app (apps/desktop/src/links.ts fills in verse,
+# version, os and setup). Field ids are part of that link: rename them in both places.
+name: Report a problem
+description: A wrong or badly drawn verse, a translation next to the wrong verse, or a bug.
+labels: ["problem"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. The Arabic text comes unmodified from [Tanzil.net](https://tanzil.net); if a verse looks wrong, a screenshot and the verse in your printed mushaf help most.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem?
+      options:
+        - Arabic text or how it is drawn (letters, tashkeel, marks, verse numbers)
+        - Translation (wrong verse, missing text, attribution)
+        - Surah names, juz, hizb, page or sajda markers
+        - Search or ⌘K navigation
+        - Highlights, notes, bookmarks, plan or export
+        - Installing or updating
+        - Something else
+    validations:
+      required: true
+  - type: input
+    id: verse
+    attributes:
+      label: Verse
+      description: The reference, e.g. 2:255, or a range.
+      placeholder: "2:255"
+  - type: textarea
+    id: what
+    attributes:
+      label: What is wrong?
+      description: What you see, and what you expected instead. Screenshots can be pasted here.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      placeholder: "1.0.0"
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15 / Windows 11 / Ubuntu 24.04
+  - type: input
+    id: setup
+    attributes:
+      label: View, translation and theme

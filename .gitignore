@@ -11,3 +11,7 @@ apps/desktop/src-tauri/gen/schemas/
 
 # xtask download cache (sources are re-fetched and SHA-256 checked)
 .cache/
+
+# Playwright (apps/desktop/e2e): failure output and HTML report
+apps/desktop/e2e/results/
+apps/desktop/e2e/report/

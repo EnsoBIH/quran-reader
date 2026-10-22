@@ -103,6 +103,12 @@ describe("settings", () => {
     expect(parseSettings({ translation: 3 }).translation).toBeNull();
   });
 
+  it("checks for updates unless turned off", () => {
+    expect(DEFAULT_SETTINGS.checkUpdates).toBe(true);
+    expect(parseSettings({ checkUpdates: false }).checkUpdates).toBe(false);
+    expect(parseSettings({ checkUpdates: "no" }).checkUpdates).toBe(true);
+  });
+
   it("picks the chosen translation, else one in the user's language, else the first", () => {
     const installed = [translation("en.a", "en"), translation("user.de.b", "de", false)];
     expect(pickTranslation(installed, "user.de.b")?.id).toBe("user.de.b");

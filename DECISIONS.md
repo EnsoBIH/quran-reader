@@ -222,3 +222,93 @@ Why separate:
 **Decision.** The correction now takes the reading row the same way as `update` does (one pixel in), remembers how far the viewport top is into it, and after applying the new sizes puts it back at exactly that distance. The re-estimate after a font or view change uses the same rule.
 
 **Consequences.** Measured in the real window (WKWebView, dev build), offset of the jumped-to row from the viewport top for 2:255, 18:10, 2:282, 24:35, 3:100, 36:1 and 9:60: stacked view before −55 −53 11 10 −54 1 −82 px, after 1 1 1 0 1 1 0; columns before 0 0 0 −57 0 −62 0, after 0 0 0 1 0 1 0; Arabic only 0 throughout. A plan portion (4:24) and a restore after restart (3:1, stacked) also land at 0. The bug was real, not only a test-environment artifact.
+
+## D-025 · Platforms and release pipeline: macOS, Windows and Linux from 1.0 (2026-10-22)
+
+**Context.** D-008 left open whether to ship macOS only. Phase 6 asks for release builds of all three platforms with `tauri-action`.
+
+**Decision.** Supersedes D-008. 1.0 ships for macOS (one universal build for Apple silicon and Intel, macOS 11+), Windows 10/11 x64 and Linux x86-64. `.github/workflows/release.yml` builds on `macos-15`, `windows-2025` and `ubuntu-22.04` (the oldest supported LTS runner, so the packages work on older glibc) when a tag `v<version>` is pushed, and uploads the bundles to a *draft* release that the maintainer publishes by hand after checking it (docs/release.md). A first job checks that the tag matches the version, that the updater key is in `tauri.conf.json` and that every signing secret is set, so a release is never built half-signed. Pull requests that touch the app shell or the workflow build the same bundles unsigned, as a check that bundling still works and stays small.
+
+- macOS: Developer ID signature and notarization with the Apple secrets (docs/release.md); the bundler imports the certificate into a temporary keychain.
+- Windows: NSIS (`-setup.exe`, per-user install, no admin rights; the updater prefers it) and MSI. No Authenticode certificate yet, so SmartScreen warns on first start; the download page says so. Azure Trusted Signing or an OV certificate can be added later without changing the app.
+- Linux: AppImage, `.deb`, `.rpm`.
+- One version for everything: the root `Cargo.toml` (`workspace.package.version`, now 1.0.0). `tauri.conf.json` no longer has its own `version` and takes the Cargo one, so the app, the `quran-core` version shown in the footer and the tag cannot disagree. The JS packages are private and keep 0.0.0.
+
+**Consequences.** The bundle identifier (D-006) is now final: changing it after a release would move users' study data. Building costs about 15 runner minutes per platform per release.
+
+## D-026 · Installer budget: under 15 MB (2026-10-22)
+
+**Decision.** Every installer — `.dmg`, NSIS `-setup.exe`, `.msi`, `.deb`, `.rpm` — must be smaller than 15 MB (15,000,000 bytes). `apps/desktop/scripts/bundle-size.mjs` runs after each release build, lists every bundle in the job summary and fails the job when an installer reaches the limit. The AppImage is listed but exempt: it carries its own WebKitGTK and GTK (typically 70–100 MB), which is the point of the format, and it is the Linux build the updater can replace in place. The `.app.tar.gz` is the macOS update payload, not an installer.
+
+What goes in: the Rust binary with the embedded data (`quran.bin` 1.3 MB, Pickthall 0.85 MB), SQLite (+1.7 MB, D-021), the updater (HTTP client with rustls and the `ring` crypto, minisign verification) and the frontend (0.46 MB: JS, CSS and the Amiri Quran subsets as woff2 and woff; Tauri compresses embedded assets with Brotli). The universal macOS binary holds two architectures, so it is the largest; the `.dmg` is compressed. The release profile already uses LTO, one codegen unit and `strip` (root `Cargo.toml`).
+
+**Consequences.** Measured on the unsigned CI build of 1.0.0 (pull request #15): `.dmg` (universal) 10.8 MB, NSIS `-setup.exe` 4.5 MB, `.msi` 6.2 MB, `.deb` 6.4 MB, `.rpm` 6.4 MB; AppImage 84.6 MB, `.app.tar.gz` 11.1 MB. The universal `.dmg` has the least headroom (4.2 MB). A regression shows up as a red pull request check before it reaches a release.
+
+## D-027 · Auto-updater via GitHub Releases (2026-10-22)
+
+**Decision.** `tauri-plugin-updater` with one endpoint, `https://github.com/EnsoBIH/quran-reader/releases/latest/download/latest.json`, which `tauri-action` writes into every release (`updaterJsonPreferNsis: true`). `releases/latest` resolves only to published, non-pre-release releases, so drafts and pre-releases never reach users.
+
+- The check and the install run in Rust (`check_update`, `install_update` in `src-tauri/src/lib.rs`); the webview gets no plugin permissions. The update found by the check is kept in Rust state, so the webview cannot hand in a different one.
+- The app checks once, five seconds after start-up (off the start-up path), if *Check for a new version at start-up* is on in the settings (default on, stored with the reader settings, D-014). A found update shows a card with the version, the release notes, *Install and restart* and *Later*; nothing is downloaded before the click. Settings → Updates has *Check now*. Development builds never check.
+- Every update is verified against the minisign public key in `tauri.conf.json` before it is installed. Windows installs in `passive` mode (progress bar, no questions) and restarts the app; macOS and the AppImage are replaced in place, then the app restarts.
+- The request carries no user data; GitHub sees the IP address and the plugin's user agent like any download. The privacy page says so.
+- The public key is empty in the repository until the maintainer generates the key pair (docs/release.md); the private key never enters the repository. An agent or contributor cannot create it on the maintainer's behalf, because whoever holds it can ship code to every installed copy.
+
+**Consequences.** New crates in the app: `tauri-plugin-updater` (with `reqwest`, `rustls` + `ring`, `minisign-verify`, `zip`/`tar`/`flate2`) and `tauri-plugin-opener` (D-030). Losing the private key means existing installs can no longer be updated. `.deb` and `.rpm` installs get the update offered but are best updated by downloading the new package.
+
+## D-028 · Screenshot tests of the Arabic per webview engine (2026-10-22)
+
+**Context.** D-001: the app is drawn by three different webviews (WKWebView, WebView2, WebKitGTK), so Arabic shaping needs a check on each. Driving the real webviews is not possible on all three: `tauri-driver` (WebDriver) has no macOS support, and none of the webviews exposes a screenshot API through Tauri.
+
+**Decision.** Playwright renders a test page (`apps/desktop/e2e/index.html`) with the app's own components (`Ayah`, `SurahHeader`, `Basmala`), theme and font, on the OS of each webview with the engine behind it: WebKit on macOS (the engine of WKWebView, with CoreText), Microsoft Edge on Windows (WebView2 *is* Edge's Chromium, with DirectWrite), WebKit on Linux (Playwright's Linux WebKit is the GTK port, as WebKitGTK; HarfBuzz and FreeType). CI runs them as the job "Arabic rendering" on pinned runner images.
+
+- *Verses.* `apps/desktop/e2e/verses.json` is generated from the embedded data by `UPDATE_FIXTURE=1 cargo test -p quran-core --test fixture` and checked by `cargo test`, so the page shows exactly the app's text. Sections: al-Fatihah with Pickthall below, 2:1–5 with header and Basmala, 2:255, the Basmala variants (95, 97, 27:30), disjoined letters, sajda verses, surah 9, the rare Hafs marks (11:41, 12:11, 21:88, 41:44), short surahs, and — chosen by the generator — the shortest verse for each character not covered yet, so every character that occurs in the text is on the page.
+- *Screenshots.* One per section, compared with the committed baseline of that engine (`e2e/screenshots/<engine>/`, `maxDiffPixelRatio` 0.002). A missing baseline fails in CI; new ones are generated by the runners (docs/release.md) and reviewed as images.
+- *Measurements*, which hold in every engine without a baseline: letters join (a word is at least 10 % narrower than the same letters forced apart with ZWNJ; HarfBuzz with Amiri Quran: 43 vs 95 px for بسم at 40 px), tashkeel adds no advance width (marks drawn as separate glyphs or with a dotted circle would; ±1 px), the end-of-ayah sign encloses its number (۝٢٨٦ is as wide as ۝), every verse number on the page is drawn inside its sign, and the verse runs right to left.
+- *Font coverage*, without a browser: every character of the text lies in the `unicode-range` of an Amiri Quran `@font-face` and has a glyph in that face's file (cmap), so no character silently falls back to another font.
+
+**Consequences.** The tests stand for the webviews' engines, not the exact system builds: WKWebView uses the macOS system WebKit, WebView2 the Evergreen runtime, WebKitGTK the distribution's version. Real-window checks per platform stay part of the release checklist and the content review (docs/content-review.md). New runner images or Playwright versions mean new baselines.
+
+## D-029 · Landing page on GitHub Pages with per-PR previews (2026-10-22)
+
+**Decision.** `.github/workflows/site.yml` builds `apps/web` and pushes it to the `gh-pages` branch: main to the root (`JamesIves/github-pages-deploy-action`, rebasing rather than force-pushing and keeping `pr-preview/`), each pull request that changes the site to `pr-preview/pr-<n>/` with a sticky comment linking it, removed again when the pull request closes (`rossjrw/pr-preview-action`). Both third-party actions are pinned to a commit. Astro takes `site` and `base` from `SITE_URL` / `SITE_BASE`, all internal links go through `href()` (`apps/web/src/lib/links.ts`), and assets go to `assets/` instead of `_astro/`, which Jekyll on GitHub Pages would drop.
+
+Considered: Cloudflare Pages, Netlify or Vercel (previews built in, but an outside account and its token in the repository secrets), and the "GitHub Actions" Pages source (no subfolders, so no previews next to the main site).
+
+**Consequences.** No account outside GitHub. Pull requests from forks get no preview (their token is read-only). Pages has to be switched on once (docs/release.md). A custom domain later only needs a `CNAME` file and `SITE_BASE=/`.
+
+## D-030 · "Report a problem" and external links (2026-10-22)
+
+**Decision.** The footer and the credits have *Report a problem*. It opens the GitHub issue form `.github/ISSUE_TEMPLATE/problem.yml` in the browser with the verse being read (or the selected one), the app version, the OS (from the user agent) and view, translation and theme filled in through the form's query parameters (`apps/desktop/src/links.ts`). Nothing is sent from the app; the user sees and edits everything before submitting, and needs a GitHub account to do so. The credits link to their sources.
+
+Links open through one Rust command, `open_link`, which only accepts URLs below a short list of prefixes (the repository, tanzil.net, the Amiri repository, the Gutenberg eBook) and uses `tauri-plugin-opener` from Rust; the webview gets no opener permission. So a bug in the frontend cannot open arbitrary URLs or local files.
+
+## D-031 · Content review before 1.0 (2026-10-22)
+
+**Decision.** `docs/content-review.md` is the checklist for people with Arabic and Quran knowledge: rendering on each webview (with the screenshot sheets of D-028), structure (Basmala, counts, juz/hizb/page, sajdas and their labels), names and named verses, search, the translation and attributions, wording. Each reviewer files a *Content review* issue (`.github/ISSUE_TEMPLATE/content-review.yml`) with their background, what they compared against and their findings; the sign-off table in the document records it. Areas A and B need two independent reviewers. Text findings go to Tanzil, since the app never edits the text (D-004).
+
+**Consequences.** The 1.0 tag waits for the sign-off (docs/release.md, step 1). The review itself cannot be automated and is not part of the pull request that sets it up.
+
+## D-032 · Spaces from the Arabic font file, so waqf marks are drawn (2026-10-22)
+
+**Context.** The first run of the screenshot tests (D-028) in WebKit on Linux showed every waqf mark (ۖ ۗ ۚ ۛ ۘ ۙ, e.g. the paired ۛ of 2:2) as an empty box, and lines with them ran past the left edge. In the Tanzil text a waqf mark is a combining mark on the *space* between two words. `@fontsource/amiri-quran` splits Amiri Quran into an Arabic and a Latin file and assigns U+0020 to the Latin one; WebKit draws a combining mark with the font of its base character, and the Latin file has no waqf marks.
+
+**Decision.** `packages/ui/src/quran-font.css` imports the Fontsource faces and adds one more face of "Amiri Quran" with the Arabic file for U+0020 and U+00A0 (the Arabic file has both). Faces declared later win for overlapping ranges, so spaces in Arabic text now come from the Arabic file, together with the marks on them. The desktop app, the landing page and the test page import this file instead of the package. No new file is shipped: the face points at the same hashed asset. A font test checks that every mark in the text is in the file of the character it sits on; without this face it lists the six waqf marks on U+0020.
+
+**Consequences.** Spaces in Latin text set in Amiri Quran come from the Arabic file too (same design, same width). The font test guards this independently of the engine; Chromium (WebView2) picks a font per cluster and was probably not affected.
+
+## D-033 · Verse number and its sign in one text node (2026-10-22)
+
+**Context.** The CI screenshots of D-028 showed every verse number *next to* an empty end-of-ayah sign in WebKit on macOS and Linux, while Edge drew it inside. `Ayah` rendered `{END_OF_AYAH}{toArabicIndic(n)}`, which React turns into two DOM text nodes. WebKit shapes each text node on its own, so Amiri Quran never saw U+06DD followed by digits; Chromium shapes across nodes in one inline context. The isolated measurement passed in both engines because it used one string.
+
+**Decision.** `Ayah` renders the sign and the number as one string. A test measures every verse number as rendered on the test page against the width of the sign alone; without the fix it lists all 44 verses there.
+
+**Consequences.** In the macOS and Linux app, verse numbers now sit inside the ornament, as they did on Windows. Lesson for components that show Arabic: build strings that must shape together as one text node.
+
+## D-034 · Known issue: words drop below the line in WebKitGTK (open) (2026-10-22)
+
+**Context.** The CI screenshots of WebKit on Linux (`apps/desktop/e2e/screenshots/webkitgtk/`, Ubuntu 24.04) draw some words lower than the rest of the line, with their tashkeel left at the normal height: ٱللَّهُ in 112:1–2, عَلَىٰ in 2:5 and 12:11, ءَايَٰتُهُۥٓ in 41:44. WebKit on macOS and Edge on Windows draw the same text correctly. In every case HarfBuzz returns, as the visually first glyph of the word, a mark with a large downward offset (ٰ on ى: −801 units; ٓ: −642; the damma of ٱللَّهُ). This is the symptom of WebKit bug [205990](https://bugs.webkit.org/show_bug.cgi?id=205990) ("Arabic diacritics made glyphs vertically unaligned if the first glyph had a vertical offset"), fixed for the Cairo backend in [r254190](https://trac.webkit.org/r254190) (2020); WebKitGTK has since moved to Skia, so this looks like a regression there. A scan of the whole text with HarfBuzz and Amiri Quran finds the pattern in about 3,400 words in 2,265 verses (ٱللَّهُ 733 times, عَلَىٰ 347, إِلَىٰ 211, …).
+
+**Decision.** Not worked around in this change: the text is never altered (D-004), so invisible characters to change the glyph order are out, and no CSS property changes how WebKit applies glyph offsets. The baselines record the current (wrong) rendering, so an engine fix shows up as a screenshot diff to review. To do: confirm in the real Tauri window on Linux (system WebKitGTK, not Playwright's build), report it upstream with a minimal test case, and try another Quran font with different mark anchors (e.g. KFGQPC, once permitted, D-005) as a fallback.
+
+**Consequences.** Until then the Linux build shows these words misplaced, which a reader will notice. Whether Linux ships with 1.0 is for the maintainer and the content review (area A) to decide; the download page and release notes should say so if it does.

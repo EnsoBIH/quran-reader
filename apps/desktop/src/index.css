@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "@fontsource/amiri-quran";
+@import "@quran-reader/ui/quran-font.css";
 @import "@quran-reader/ui/theme.css";
 
 html,

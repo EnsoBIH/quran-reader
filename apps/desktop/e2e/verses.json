@@ -1,0 +1,462 @@
+{
+  "comment": "Generated from data/quran.bin and data/translations by `UPDATE_FIXTURE=1 cargo test -p quran-core --test fixture`. Do not edit.",
+  "sections": [
+    {
+      "id": "fatiha",
+      "rows": [
+        {
+          "bismillah": null,
+          "header": {
+            "ayahCount": 7,
+            "nameArabic": "الفاتحة",
+            "nameLatin": "Al-Faatiha",
+            "nameTranslated": "The Opening",
+            "number": 1,
+            "revelation": "meccan"
+          }
+        },
+        {
+          "ref": {
+            "ayah": 1,
+            "surah": 1
+          },
+          "text": "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ",
+          "translation": "In the name of Allah, the Beneficent, the Merciful."
+        },
+        {
+          "ref": {
+            "ayah": 2,
+            "surah": 1
+          },
+          "text": "ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَٰلَمِينَ",
+          "translation": "Praise be to Allah, Lord of the Worlds,"
+        },
+        {
+          "ref": {
+            "ayah": 3,
+            "surah": 1
+          },
+          "text": "ٱلرَّحْمَٰنِ ٱلرَّحِيمِ",
+          "translation": "The Beneficent, the Merciful."
+        },
+        {
+          "ref": {
+            "ayah": 4,
+            "surah": 1
+          },
+          "text": "مَٰلِكِ يَوْمِ ٱلدِّينِ",
+          "translation": "Master of the Day of Judgment,"
+        },
+        {
+          "ref": {
+            "ayah": 5,
+            "surah": 1
+          },
+          "text": "إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ",
+          "translation": "Thee (alone) we worship; Thee (alone) we ask for help."
+        },
+        {
+          "ref": {
+            "ayah": 6,
+            "surah": 1
+          },
+          "text": "ٱهْدِنَا ٱلصِّرَٰطَ ٱلْمُسْتَقِيمَ",
+          "translation": "Show us the straight path,"
+        },
+        {
+          "ref": {
+            "ayah": 7,
+            "surah": 1
+          },
+          "text": "صِرَٰطَ ٱلَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ ٱلْمَغْضُوبِ عَلَيْهِمْ وَلَا ٱلضَّآلِّينَ",
+          "translation": "The path of those whom Thou hast favoured; Not the (path) of those who earn Thine anger nor of those who go astray."
+        }
+      ],
+      "title": "Al-Fatihah, Basmala as verse 1, with the translation below"
+    },
+    {
+      "id": "baqara",
+      "rows": [
+        {
+          "bismillah": "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ",
+          "header": {
+            "ayahCount": 286,
+            "nameArabic": "البقرة",
+            "nameLatin": "Al-Baqara",
+            "nameTranslated": "The Cow",
+            "number": 2,
+            "revelation": "medinan"
+          }
+        },
+        {
+          "ref": {
+            "ayah": 1,
+            "surah": 2
+          },
+          "text": "الٓمٓ",
+          "translation": "Alif. Lam. Mim."
+        },
+        {
+          "ref": {
+            "ayah": 2,
+            "surah": 2
+          },
+          "text": "ذَٰلِكَ ٱلْكِتَٰبُ لَا رَيْبَ ۛ فِيهِ ۛ هُدًى لِّلْمُتَّقِينَ",
+          "translation": "This is the Scripture whereof there is no doubt, a guidance unto those who ward off (evil)."
+        },
+        {
+          "ref": {
+            "ayah": 3,
+            "surah": 2
+          },
+          "text": "ٱلَّذِينَ يُؤْمِنُونَ بِٱلْغَيْبِ وَيُقِيمُونَ ٱلصَّلَوٰةَ وَمِمَّا رَزَقْنَٰهُمْ يُنفِقُونَ",
+          "translation": "Who believe in the Unseen, and establish worship, and spend of that We have bestowed upon them;"
+        },
+        {
+          "ref": {
+            "ayah": 4,
+            "surah": 2
+          },
+          "text": "وَٱلَّذِينَ يُؤْمِنُونَ بِمَآ أُنزِلَ إِلَيْكَ وَمَآ أُنزِلَ مِن قَبْلِكَ وَبِٱلْءَاخِرَةِ هُمْ يُوقِنُونَ",
+          "translation": "And who believe in that which is revealed unto thee (Muhammad) and that which was revealed before thee, and are certain of the Hereafter."
+        },
+        {
+          "ref": {
+            "ayah": 5,
+            "surah": 2
+          },
+          "text": "أُو۟لَٰٓئِكَ عَلَىٰ هُدًى مِّن رَّبِّهِمْ ۖ وَأُو۟لَٰٓئِكَ هُمُ ٱلْمُفْلِحُونَ",
+          "translation": "These depend on guidance from their Lord. These are the successful."
+        }
+      ],
+      "title": "Surah header, Basmala line, disjoined letters (2:1), pause marks (2:2)"
+    },
+    {
+      "id": "kursi",
+      "rows": [
+        {
+          "ref": {
+            "ayah": 255,
+            "surah": 2
+          },
+          "text": "ٱللَّهُ لَآ إِلَٰهَ إِلَّا هُوَ ٱلْحَىُّ ٱلْقَيُّومُ ۚ لَا تَأْخُذُهُۥ سِنَةٌ وَلَا نَوْمٌ ۚ لَّهُۥ مَا فِى ٱلسَّمَٰوَٰتِ وَمَا فِى ٱلْأَرْضِ ۗ مَن ذَا ٱلَّذِى يَشْفَعُ عِندَهُۥٓ إِلَّا بِإِذْنِهِۦ ۚ يَعْلَمُ مَا بَيْنَ أَيْدِيهِمْ وَمَا خَلْفَهُمْ ۖ وَلَا يُحِيطُونَ بِشَىْءٍ مِّنْ عِلْمِهِۦٓ إِلَّا بِمَا شَآءَ ۚ وَسِعَ كُرْسِيُّهُ ٱلسَّمَٰوَٰتِ وَٱلْأَرْضَ ۖ وَلَا يَـُٔودُهُۥ حِفْظُهُمَا ۚ وَهُوَ ٱلْعَلِىُّ ٱلْعَظِيمُ",
+          "translation": "Allah! There is no deity save Him, the Alive, the Eternal. Neither slumber nor sleep overtaketh Him. Unto Him belongeth whatsoever is in the heavens and whatsoever is in the earth. Who is he that intercedeth with Him save by His leave? He knoweth that which is in front of them and that which is behind them, while they encompass nothing of His knowledge save what He will. His throne includeth the heavens and the earth, and He is never weary of preserving them. He is the Sublime, the Tremendous."
+        }
+      ],
+      "title": "A long verse across many lines (2:255)"
+    },
+    {
+      "id": "basmala",
+      "rows": [
+        {
+          "bismillah": "بِّسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ"
+        },
+        {
+          "bismillah": "بِّسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ"
+        },
+        {
+          "ref": {
+            "ayah": 30,
+            "surah": 27
+          },
+          "text": "إِنَّهُۥ مِن سُلَيْمَٰنَ وَإِنَّهُۥ بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ",
+          "translation": "Lo! it is from Solomon, and lo! it is: In the name of Allah, the Beneficent, the Merciful;"
+        }
+      ],
+      "title": "Basmala spellings: 95 and 97 with a shadda on the ba', and inside 27:30"
+    },
+    {
+      "id": "muqattaat",
+      "rows": [
+        {
+          "ref": {
+            "ayah": 1,
+            "surah": 19
+          },
+          "text": "كٓهيعٓصٓ",
+          "translation": "Kaf. Ha. Ya. A'in. Sad."
+        },
+        {
+          "ref": {
+            "ayah": 1,
+            "surah": 20
+          },
+          "text": "طه",
+          "translation": "Ta. Ha."
+        },
+        {
+          "ref": {
+            "ayah": 1,
+            "surah": 36
+          },
+          "text": "يسٓ",
+          "translation": "Ya Sin."
+        },
+        {
+          "ref": {
+            "ayah": 1,
+            "surah": 38
+          },
+          "text": "صٓ ۚ وَٱلْقُرْءَانِ ذِى ٱلذِّكْرِ",
+          "translation": "Sad. By the renowned Qur'an,"
+        },
+        {
+          "ref": {
+            "ayah": 1,
+            "surah": 42
+          },
+          "text": "حمٓ",
+          "translation": "Ha. Mim."
+        },
+        {
+          "ref": {
+            "ayah": 2,
+            "surah": 42
+          },
+          "text": "عٓسٓقٓ",
+          "translation": "A'in. Sin. Qaf."
+        },
+        {
+          "ref": {
+            "ayah": 1,
+            "surah": 50
+          },
+          "text": "قٓ ۚ وَٱلْقُرْءَانِ ٱلْمَجِيدِ",
+          "translation": "Qaf. By the Glorious Qur'an,"
+        },
+        {
+          "ref": {
+            "ayah": 1,
+            "surah": 68
+          },
+          "text": "نٓ ۚ وَٱلْقَلَمِ وَمَا يَسْطُرُونَ",
+          "translation": "Nun. By the pen and that which they write (therewith),"
+        }
+      ],
+      "title": "Disjoined letters with maddah"
+    },
+    {
+      "id": "sajda",
+      "rows": [
+        {
+          "ref": {
+            "ayah": 206,
+            "surah": 7
+          },
+          "text": "إِنَّ ٱلَّذِينَ عِندَ رَبِّكَ لَا يَسْتَكْبِرُونَ عَنْ عِبَادَتِهِۦ وَيُسَبِّحُونَهُۥ وَلَهُۥ يَسْجُدُونَ ۩",
+          "translation": "Lo! those who are with thy Lord are not too proud to do Him service, but they praise Him and prostrate before Him."
+        },
+        {
+          "ref": {
+            "ayah": 15,
+            "surah": 32
+          },
+          "text": "إِنَّمَا يُؤْمِنُ بِـَٔايَٰتِنَا ٱلَّذِينَ إِذَا ذُكِّرُوا۟ بِهَا خَرُّوا۟ سُجَّدًا وَسَبَّحُوا۟ بِحَمْدِ رَبِّهِمْ وَهُمْ لَا يَسْتَكْبِرُونَ ۩",
+          "translation": "Only those believe in Our revelations who, when they are reminded of them, fall down prostrate and hymn the praise of their Lord, and they are not scornful,"
+        },
+        {
+          "ref": {
+            "ayah": 19,
+            "surah": 96
+          },
+          "text": "كَلَّا لَا تُطِعْهُ وَٱسْجُدْ وَٱقْتَرِب ۩",
+          "translation": "Nay, Obey not thou him. But prostrate thyself, and draw near (unto Allah)."
+        }
+      ],
+      "title": "Verses with a sajda sign"
+    },
+    {
+      "id": "tawba",
+      "rows": [
+        {
+          "bismillah": null,
+          "header": {
+            "ayahCount": 129,
+            "nameArabic": "التوبة",
+            "nameLatin": "At-Tawba",
+            "nameTranslated": "The Repentance",
+            "number": 9,
+            "revelation": "medinan"
+          }
+        },
+        {
+          "ref": {
+            "ayah": 1,
+            "surah": 9
+          },
+          "text": "بَرَآءَةٌ مِّنَ ٱللَّهِ وَرَسُولِهِۦٓ إِلَى ٱلَّذِينَ عَٰهَدتُّم مِّنَ ٱلْمُشْرِكِينَ",
+          "translation": "Freedom from obligation (is proclaimed) from Allah and His messenger toward those of the idolaters with whom ye made a treaty."
+        },
+        {
+          "ref": {
+            "ayah": 2,
+            "surah": 9
+          },
+          "text": "فَسِيحُوا۟ فِى ٱلْأَرْضِ أَرْبَعَةَ أَشْهُرٍ وَٱعْلَمُوٓا۟ أَنَّكُمْ غَيْرُ مُعْجِزِى ٱللَّهِ ۙ وَأَنَّ ٱللَّهَ مُخْزِى ٱلْكَٰفِرِينَ",
+          "translation": "Travel freely in the land four months, and know that ye cannot escape Allah and that Allah will confound the disbelievers (in His Guidance)."
+        }
+      ],
+      "title": "Surah 9: no Basmala"
+    },
+    {
+      "id": "rare-marks",
+      "rows": [
+        {
+          "ref": {
+            "ayah": 41,
+            "surah": 11
+          },
+          "text": "وَقَالَ ٱرْكَبُوا۟ فِيهَا بِسْمِ ٱللَّهِ مَجْر۪ىٰهَا وَمُرْسَىٰهَآ ۚ إِنَّ رَبِّى لَغَفُورٌ رَّحِيمٌ",
+          "translation": "And he said: Embark therein! In the name of Allah be its course and its mooring. Lo! my Lord is Forgiving, Merciful."
+        },
+        {
+          "ref": {
+            "ayah": 11,
+            "surah": 12
+          },
+          "text": "قَالُوا۟ يَٰٓأَبَانَا مَا لَكَ لَا تَأْمَ۫نَّا عَلَىٰ يُوسُفَ وَإِنَّا لَهُۥ لَنَٰصِحُونَ",
+          "translation": "They said: O our father! Why wilt thou not trust us with Joseph, when lo! we are good friends to him?"
+        },
+        {
+          "ref": {
+            "ayah": 88,
+            "surah": 21
+          },
+          "text": "فَٱسْتَجَبْنَا لَهُۥ وَنَجَّيْنَٰهُ مِنَ ٱلْغَمِّ ۚ وَكَذَٰلِكَ نُۨجِى ٱلْمُؤْمِنِينَ",
+          "translation": "Then we heard his prayer and saved him from the anguish. Thus we save believers."
+        },
+        {
+          "ref": {
+            "ayah": 44,
+            "surah": 41
+          },
+          "text": "وَلَوْ جَعَلْنَٰهُ قُرْءَانًا أَعْجَمِيًّا لَّقَالُوا۟ لَوْلَا فُصِّلَتْ ءَايَٰتُهُۥٓ ۖ ءَا۬عْجَمِىٌّ وَعَرَبِىٌّ ۗ قُلْ هُوَ لِلَّذِينَ ءَامَنُوا۟ هُدًى وَشِفَآءٌ ۖ وَٱلَّذِينَ لَا يُؤْمِنُونَ فِىٓ ءَاذَانِهِمْ وَقْرٌ وَهُوَ عَلَيْهِمْ عَمًى ۚ أُو۟لَٰٓئِكَ يُنَادَوْنَ مِن مَّكَانٍۭ بَعِيدٍ",
+          "translation": "And if We had appointed it a Lecture in a foreign tongue they would assuredly have said: If only its verses were expounded (so that we might understand)? What! A foreign tongue and an Arab? - Say unto them (O Muhammad): For those who believe it is a guidance and a healing; and as for those who disbelieve, there is a deafness in their ears, and it is blindness for them. Such are called to from afar."
+        }
+      ],
+      "title": "Rare marks of the Hafs text: 11:41, 12:11, 21:88, 41:44"
+    },
+    {
+      "id": "short-surahs",
+      "rows": [
+        {
+          "bismillah": "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ",
+          "header": {
+            "ayahCount": 3,
+            "nameArabic": "الكوثر",
+            "nameLatin": "Al-Kawthar",
+            "nameTranslated": "Abundance",
+            "number": 108,
+            "revelation": "meccan"
+          }
+        },
+        {
+          "ref": {
+            "ayah": 1,
+            "surah": 108
+          },
+          "text": "إِنَّآ أَعْطَيْنَٰكَ ٱلْكَوْثَرَ",
+          "translation": "Lo! We have given thee Abundance;"
+        },
+        {
+          "ref": {
+            "ayah": 2,
+            "surah": 108
+          },
+          "text": "فَصَلِّ لِرَبِّكَ وَٱنْحَرْ",
+          "translation": "So pray unto thy Lord, and sacrifice."
+        },
+        {
+          "ref": {
+            "ayah": 3,
+            "surah": 108
+          },
+          "text": "إِنَّ شَانِئَكَ هُوَ ٱلْأَبْتَرُ",
+          "translation": "Lo! it is thy insulter (and not thou) who is without posterity."
+        },
+        {
+          "bismillah": "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ",
+          "header": {
+            "ayahCount": 4,
+            "nameArabic": "الإخلاص",
+            "nameLatin": "Al-Ikhlaas",
+            "nameTranslated": "Sincerity",
+            "number": 112,
+            "revelation": "meccan"
+          }
+        },
+        {
+          "ref": {
+            "ayah": 1,
+            "surah": 112
+          },
+          "text": "قُلْ هُوَ ٱللَّهُ أَحَدٌ",
+          "translation": "Say: He is Allah, the One!"
+        },
+        {
+          "ref": {
+            "ayah": 2,
+            "surah": 112
+          },
+          "text": "ٱللَّهُ ٱلصَّمَدُ",
+          "translation": "Allah, the eternally Besought of all!"
+        },
+        {
+          "ref": {
+            "ayah": 3,
+            "surah": 112
+          },
+          "text": "لَمْ يَلِدْ وَلَمْ يُولَدْ",
+          "translation": "He begetteth not nor was begotten."
+        },
+        {
+          "ref": {
+            "ayah": 4,
+            "surah": 112
+          },
+          "text": "وَلَمْ يَكُن لَّهُۥ كُفُوًا أَحَدٌۢ",
+          "translation": "And there is none comparable unto Him."
+        }
+      ],
+      "title": "Short surahs in full"
+    },
+    {
+      "id": "coverage",
+      "rows": [
+        {
+          "ref": {
+            "ayah": 6,
+            "surah": 54
+          },
+          "text": "فَتَوَلَّ عَنْهُمْ ۘ يَوْمَ يَدْعُ ٱلدَّاعِ إِلَىٰ شَىْءٍ نُّكُرٍ",
+          "translation": "So withdraw from them (O Muhammad) on the day when the Summoner summoneth unto a painful thing."
+        },
+        {
+          "ref": {
+            "ayah": 27,
+            "surah": 75
+          },
+          "text": "وَقِيلَ مَنْ ۜ رَاقٍ",
+          "translation": "And men say: Where is the wizard (who can save him now)?"
+        },
+        {
+          "ref": {
+            "ayah": 115,
+            "surah": 26
+          },
+          "text": "إِنْ أَنَا۠ إِلَّا نَذِيرٌ مُّبِينٌ",
+          "translation": "I am only a plain warner."
+        },
+        {
+          "ref": {
+            "ayah": 37,
+            "surah": 52
+          },
+          "text": "أَمْ عِندَهُمْ خَزَآئِنُ رَبِّكَ أَمْ هُمُ ٱلْمُصَۣيْطِرُونَ",
+          "translation": "Or do they own the treasures of thy Lord? Or have they been given charge (thereof)?"
+        }
+      ],
+      "title": "Every other character used in the text"
+    }
+  ]
+}

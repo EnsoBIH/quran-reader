@@ -1,0 +1,15 @@
+/* The app's styles without its fixed, non-scrolling frame, so every section can be shot. */
+@import "tailwindcss";
+@import "@quran-reader/ui/quran-font.css";
+@import "@quran-reader/ui/theme.css";
+
+:root {
+  /* The app's defaults (settings.ts). */
+  --reader-arabic-size: 1.875rem;
+  --reader-translation-size: 1.0625rem;
+  --reader-measure: 42rem;
+}
+
+body {
+  font-family: var(--font-sans);
+}

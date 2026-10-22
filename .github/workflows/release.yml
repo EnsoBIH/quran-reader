@@ -1,0 +1,174 @@
+name: Release
+
+# A tag `v<version>` builds the app for macOS (universal, signed and notarized), Windows and
+# Linux and uploads everything to a draft GitHub release, with `latest.json` for the
+# updater. Publishing the draft is a manual step (docs/release.md). Pull requests that touch
+# the app shell or this workflow, and manual runs, build the same bundles unsigned, check
+# their size and keep them as workflow artifacts.
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - apps/desktop/scripts/bundle-size.mjs
+      - apps/desktop/src-tauri/**
+      - Cargo.lock
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release-id: ${{ steps.release.outputs.id }}
+      updater: ${{ steps.check.outputs.updater }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check version, updater key and signing secrets
+        id: check
+        env:
+          RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          TAG: ${{ github.ref_name }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          pubkey=$(jq -r '.plugins.updater.pubkey' apps/desktop/src-tauri/tauri.conf.json)
+          echo "App version $version"
+          updater=false
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] && [ -n "$pubkey" ]; then updater=true; fi
+          echo "updater=$updater" >> "$GITHUB_OUTPUT"
+          if [ "$RELEASE" != "true" ]; then
+            echo "Dry run: unsigned bundles, updater artifacts: $updater"
+            exit 0
+          fi
+          failed=0
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::Tag $TAG does not match the version in Cargo.toml (v$version)"
+            failed=1
+          fi
+          if [ -z "$pubkey" ]; then
+            echo "::error::plugins.updater.pubkey is empty in tauri.conf.json (docs/release.md)"
+            failed=1
+          fi
+          for name in TAURI_SIGNING_PRIVATE_KEY APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD \
+            APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret $name is not set (docs/release.md)"
+              failed=1
+            fi
+          done
+          exit $failed
+      - name: Create the draft release
+        id: release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n 1)
+          if [ -z "$id" ]; then
+            gh release create "$TAG" --draft --verify-tag --title "Quran Reader ${TAG#v}" \
+              --notes "Downloads for macOS (universal: Apple silicon and Intel), Windows and Linux. See docs/release.md for which file to pick."
+            id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+              --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n 1)
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: prepare
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS universal
+            os: macos-15
+            args: --target universal-apple-darwin
+            rust-targets: aarch64-apple-darwin x86_64-apple-darwin
+          - name: Windows
+            os: windows-2025
+          # The oldest supported Ubuntu LTS runner, so the packages run on older glibc too.
+          - name: Linux
+            os: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Linux dependencies for Tauri
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+      - uses: dtolnay/rust-toolchain@1.94
+      # rust-toolchain.toml selects the toolchain ("1.94", not the action's "1.94.1"), so the
+      # targets go to that one.
+      - if: matrix.rust-targets
+        run: rustup target add ${{ matrix.rust-targets }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Signing environment
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Passes on only what is set: an empty APPLE_CERTIFICATE would make the bundler try
+          # to import it. Without the updater key, a dry run builds with --no-sign (below).
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
+            APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID TAURI_SIGNING_PRIVATE_KEY \
+            TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+            if [ -n "${!name}" ]; then
+              delimiter="EOF_$RANDOM$RANDOM"
+              { echo "$name<<$delimiter"; echo "${!name}"; echo "$delimiter"; } >> "$GITHUB_ENV"
+            fi
+          done
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          projectPath: apps/desktop
+          tauriScript: pnpm tauri
+          # Unsigned dry run without the updater key: the CLI would otherwise refuse to bundle.
+          args: ${{ matrix.args }} ${{ needs.prepare.outputs.updater != 'true' && '--no-sign' || '' }}
+          releaseId: ${{ needs.prepare.outputs.release-id }}
+          tagName: ${{ needs.prepare.outputs.release-id && github.ref_name || '' }}
+          releaseDraft: true
+          updaterJsonPreferNsis: true
+          uploadWorkflowArtifacts: ${{ !needs.prepare.outputs.release-id }}
+          workflowArtifactNamePattern: "[platform]-[arch]-[bundle]"
+          retryAttempts: 1
+      - name: Installer size (limit 15 MB)
+        shell: bash
+        run: node apps/desktop/scripts/bundle-size.mjs target

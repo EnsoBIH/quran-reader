@@ -1,0 +1,59 @@
+name: Content review
+description: Sign off one part of the content review (docs/content-review.md).
+title: "Content review: "
+labels: ["content review"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The checklist and what to compare against are in [docs/content-review.md](https://github.com/EnsoBIH/quran-reader/blob/main/docs/content-review.md). One issue per area and reviewer. Please say where your knowledge comes from — that is what makes the review worth something to readers.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - A. Arabic text and its rendering
+        - B. Structure (Basmala, verse numbers, juz, hizb, pages, sajdas)
+        - C. Surah names and named verses
+        - D. Search (spelling variants, normalization)
+        - E. Translation (Pickthall) and attributions
+        - F. Wording in the app and on the site
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version or commit reviewed
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: System and webview
+      placeholder: macOS 15 (WKWebView) / Windows 11 (WebView2) / Ubuntu 24.04 (WebKitGTK)
+  - type: textarea
+    id: background
+    attributes:
+      label: Your background
+      description: E.g. hafiz, teacher of tajwid, Arabic philologist, native speaker. Optional, but it helps.
+  - type: textarea
+    id: compared
+    attributes:
+      label: What you compared against
+      description: E.g. Madina Mushaf (King Fahd Complex, 1441 AH print), Tanzil online, a tafsir.
+    validations:
+      required: true
+  - type: textarea
+    id: findings
+    attributes:
+      label: Findings
+      description: Each with its verse reference. "No findings" is a useful result too.
+    validations:
+      required: true
+  - type: checkboxes
+    id: result
+    attributes:
+      label: Result
+      options:
+        - label: I checked every item of this area in docs/content-review.md
+        - label: I found no problem that should block a release

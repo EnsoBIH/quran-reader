@@ -1,6 +1,7 @@
 ---
 import { SurahHeader } from "@quran-reader/ui";
 import Base from "../layouts/Base.astro";
+import { href, REPO_URL } from "../lib/links.ts";
 
 const features = [
   ["Instant", "Text on the first frame. Full-text search across the whole Quran in milliseconds."],
@@ -23,8 +24,8 @@ const features = [
       Fast, beautifully typeset and fully open source. No accounts, no tracking.
     </p>
     <div class="flex justify-center gap-3">
-      <a href="/download" class="rounded-md bg-accent px-5 py-2.5 font-medium text-paper">Download</a>
-      <a href="https://github.com/EnsoBIH/quran-reader" class="rounded-md border border-rule px-5 py-2.5 font-medium">
+      <a href={href("download")} class="rounded-md bg-accent px-5 py-2.5 font-medium text-paper">Download</a>
+      <a href={REPO_URL} class="rounded-md border border-rule px-5 py-2.5 font-medium">
         Source code
       </a>
     </div>

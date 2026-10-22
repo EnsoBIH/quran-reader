@@ -53,6 +53,45 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
+  screenshots:
+    # Arabic rendering per webview engine (DECISIONS.md D-028). Runner images are pinned:
+    # a new image (or Playwright version) changes fonts and engines, and then the baselines
+    # in apps/desktop/e2e/screenshots/ are regenerated (docs/release.md).
+    name: Arabic rendering (${{ matrix.engine }})
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, engine: wkwebview, browser: webkit }
+          - { os: windows-2025, engine: webview2, browser: msedge }
+          - { os: ubuntu-24.04, engine: webkitgtk, browser: webkit }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Edge is preinstalled on the Windows runner; WebKit comes with Playwright.
+      - if: matrix.browser == 'webkit'
+        run: pnpm --filter @quran-reader/desktop exec playwright install --with-deps webkit
+      - run: pnpm --filter @quran-reader/desktop test:e2e
+        env:
+          # Set to `missing` or `all` (repository variable) to write new baselines.
+          E2E_UPDATE_SNAPSHOTS: ${{ vars.E2E_UPDATE_SNAPSHOTS }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.engine }}
+          path: |
+            apps/desktop/e2e/screenshots/${{ matrix.engine }}/
+            apps/desktop/e2e/results/
+            apps/desktop/e2e/report/
+          if-no-files-found: ignore
+
   data:
     name: Data (xtask verify)
     runs-on: ubuntu-latest

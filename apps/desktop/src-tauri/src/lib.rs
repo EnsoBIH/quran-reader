@@ -15,8 +15,11 @@ use quran_core::{
     CoreInfo, Hit, QuranText, SearchIndex, SearchResults, Surah, SurahText, Translation,
     TranslationInfo, VerseRef,
 };
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tauri::Manager;
+use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_updater::{Update, UpdaterExt};
 
 /// When `run` started, for the start-up measurement in [`text_visible`].
 static STARTED: OnceLock<Instant> = OnceLock::new();
@@ -485,6 +488,92 @@ fn apply_import(
     })
 }
 
+/// Pages the app may open in the browser: the project's own (issues, releases) and the
+/// sources named in the credits. Anything else is refused, so the webview cannot be used to
+/// open arbitrary URLs or local files.
+const LINKS: &[&str] = &[
+    "https://github.com/EnsoBIH/quran-reader/",
+    "https://tanzil.net/",
+    "https://github.com/aliftype/amiri/",
+    "https://www.gutenberg.org/ebooks/16955/",
+];
+
+fn allowed_link(url: &str) -> bool {
+    LINKS.iter().any(|prefix| {
+        url.strip_prefix(prefix)
+            .is_some_and(|rest| !rest.contains(['\\', ' ', '\n', '\r']))
+    })
+}
+
+/// Opens one of the [`LINKS`] in the default browser.
+#[tauri::command]
+fn open_link(app: tauri::AppHandle, url: &str) -> Result<(), String> {
+    if !allowed_link(url) {
+        return Err(format!("not an allowed link: {url}"));
+    }
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+/// An update found by [`check_update`], kept until the user installs it.
+#[derive(Default)]
+struct PendingUpdate(Mutex<Option<Update>>);
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateInfo {
+    version: String,
+    current_version: String,
+    /// Release notes from the GitHub release.
+    notes: Option<String>,
+}
+
+/// Asks GitHub Releases (`latest.json`, see `plugins.updater` in tauri.conf.json) for a newer
+/// version. Release builds only: a development build has nothing to replace.
+#[tauri::command]
+async fn check_update(
+    app: tauri::AppHandle,
+    pending: tauri::State<'_, PendingUpdate>,
+) -> Result<Option<UpdateInfo>, String> {
+    if cfg!(debug_assertions) {
+        return Err("updates are only checked in release builds".into());
+    }
+    let update = app
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| e.to_string())?;
+    let info = update.as_ref().map(|u| UpdateInfo {
+        version: u.version.clone(),
+        current_version: u.current_version.clone(),
+        notes: u.body.clone().filter(|b| !b.trim().is_empty()),
+    });
+    *pending.0.lock().unwrap_or_else(|e| e.into_inner()) = update;
+    Ok(info)
+}
+
+/// Downloads the update found by [`check_update`], checks its signature against the
+/// public key in tauri.conf.json, installs it and restarts the app.
+#[tauri::command]
+async fn install_update(
+    app: tauri::AppHandle,
+    pending: tauri::State<'_, PendingUpdate>,
+) -> Result<(), String> {
+    let update = pending
+        .0
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+        .ok_or("no update to install; check for updates first")?;
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| e.to_string())?;
+    app.restart()
+}
+
 /// Called by the UI once the first verses are painted. Returns milliseconds since start-up
 /// and prints them when `QURAN_READER_TIMING` is set (start-up target: < 300 ms).
 #[tauri::command]
@@ -505,6 +594,9 @@ fn sha256(bytes: &[u8]) -> [u8; 32] {
 pub fn run() {
     STARTED.get_or_init(Instant::now);
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(PendingUpdate::default())
         .setup(|app| {
             let data = app.path().app_data_dir().ok();
             app.manage(Library::load(data.as_ref().map(|d| d.join("translations"))));
@@ -541,6 +633,9 @@ pub fn run() {
             export_study,
             preview_import,
             apply_import,
+            open_link,
+            check_update,
+            install_update,
             text_visible
         ])
         .run(tauri::generate_context!())
@@ -612,5 +707,28 @@ mod tests {
         drop(state);
         assert!(library.file("../escape").is_err());
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn opens_only_listed_links() {
+        for url in [
+            "https://github.com/EnsoBIH/quran-reader/issues/new?template=problem.yml&verse=2%3A255",
+            "https://github.com/EnsoBIH/quran-reader/releases/latest",
+            "https://tanzil.net/",
+            "https://www.gutenberg.org/ebooks/16955/",
+        ] {
+            assert!(allowed_link(url), "{url}");
+        }
+        for url in [
+            "https://github.com/EnsoBIH/quran-reader",
+            "https://github.com/EnsoBIH/quran-reader-evil/",
+            "https://tanzil.net.example.com/",
+            "http://tanzil.net/",
+            "file:///etc/passwd",
+            "https://tanzil.net/ x",
+            "https://example.com/?https://tanzil.net/",
+        ] {
+            assert!(!allowed_link(url), "{url}");
+        }
     }
 }

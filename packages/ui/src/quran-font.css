@@ -1,0 +1,23 @@
+/*
+ * Amiri Quran (SIL OFL 1.1, DECISIONS.md D-005) for the Arabic text.
+ * Consumers import this instead of `@fontsource/amiri-quran`.
+ */
+@import "@fontsource/amiri-quran";
+
+/*
+ * Fontsource splits the font into a Latin and an Arabic file and takes the space from the
+ * Latin one. In the Tanzil text, waqf marks (ۖ ۗ ۚ ۛ …) sit on a space between two words,
+ * and WebKit draws a mark with the font of its base character: the Latin file has no waqf
+ * marks, so they came out as boxes (found by the screenshot tests, D-032). The Arabic file
+ * has the space too; faces declared later win, so spaces now come from it.
+ */
+@font-face {
+  font-family: "Amiri Quran";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src:
+    url("@fontsource/amiri-quran/files/amiri-quran-arabic-400-normal.woff2") format("woff2"),
+    url("@fontsource/amiri-quran/files/amiri-quran-arabic-400-normal.woff") format("woff");
+  unicode-range: U+0020, U+00A0;
+}

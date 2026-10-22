@@ -1,10 +1,71 @@
 ---
 import Base from "../layouts/Base.astro";
+import { RELEASES_URL } from "../lib/links.ts";
+
+const platforms = [
+  {
+    name: "macOS",
+    requires: "macOS 11 or later, Apple silicon or Intel",
+    files: [["…_universal.dmg", "Open it and drag Quran Reader to Applications."]],
+    note: "Signed and notarized by Apple.",
+  },
+  {
+    name: "Windows",
+    requires: "Windows 10 or 11 (64-bit)",
+    files: [
+      ["…_x64-setup.exe", "Installs for your user account, no administrator rights needed."],
+      ["…_x64_en-US.msi", "For administrators who deploy software."],
+    ],
+    note: "Not yet signed with a Windows certificate, so SmartScreen may ask once: “More info” → “Run anyway”.",
+  },
+  {
+    name: "Linux",
+    requires: "x86-64; uses the system's WebKitGTK 4.1 (except the AppImage)",
+    files: [
+      ["…_amd64.AppImage", "Runs anywhere and updates itself."],
+      ["…_amd64.deb", "Debian, Ubuntu 22.04 or later."],
+      ["…x86_64.rpm", "Fedora, openSUSE."],
+    ],
+    note: "The .deb and .rpm are updated by downloading the new package.",
+  },
+];
 ---
 
 <Base title="Download — Quran Reader">
   <h1 class="text-3xl font-semibold tracking-tight">Download</h1>
   <p class="mt-4 text-muted">
-    No release yet. Builds for macOS, Windows and Linux will be published on GitHub Releases.
+    Every version is published on GitHub Releases, with the SHA-256 of each file next to it.
+    The installers are under 15 MB.
   </p>
+  <p class="mt-6">
+    <a href={RELEASES_URL} class="rounded-md bg-accent px-5 py-2.5 font-medium text-paper">Latest release</a>
+  </p>
+
+  <div class="mt-10 flex flex-col gap-8">
+    {
+      platforms.map((p) => (
+        <section>
+          <h2 class="font-medium">{p.name}</h2>
+          <p class="text-muted text-sm">{p.requires}</p>
+          <ul class="mt-2 flex flex-col gap-1">
+            {p.files.map(([file, what]) => (
+              <li>
+                <code class="text-sm">{file}</code> — {what}
+              </li>
+            ))}
+          </ul>
+          <p class="mt-2 text-muted text-sm">{p.note}</p>
+        </section>
+      ))
+    }
+  </div>
+
+  <section class="mt-10">
+    <h2 class="font-medium">Updates</h2>
+    <p class="mt-1 text-muted">
+      The app asks GitHub Releases for a new version when it starts and offers to install it; it
+      never installs without your click. Updates are signed, and the app refuses one whose
+      signature does not match the project's key. You can turn the check off in the settings (Aa).
+    </p>
+  </section>
 </Base>
