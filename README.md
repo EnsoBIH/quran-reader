@@ -2,7 +2,9 @@
 
 A fast, beautifully typeset Quran reader. Open source (MIT), no accounts, no tracking — all notes stay on your machine.
 
-> Status: **Phase 5 — study.** The desktop app scrolls continuously through the whole Quran (virtualized, with juz, hizb, page and sajda markers), jumps with ⌘K (`2:255`, `baqara 255`, `بقرة`, `Ayat al-Kursi`, `juz 30`, `page 604`), searches the Arabic text and the translations with ⌘F (tashkeel and letter variants ignored; `"phrases"`, `-exclusions`, `surah:2`, `juz:30`), shows a translation below or beside the Arabic (T toggles it; Pickthall's English is bundled; any other, e.g. from Tanzil, can be [imported](docs/translation-import.md)), compares all installed translations of a verse with C, and has local study tools: highlights in six colours (1–6), notes (N), bookmarks (B), copy with reference (⌘C), a khatm reading plan, and export / import as Markdown and JSON (S opens the study panel). Study data and the last position live in one SQLite file in the app data folder. `cargo quran read kursi` prints a verse, `cargo quran search رحمن juz:30` searches.
+> Status: **Phase 6 — release.** Release builds for macOS (universal, signed and notarized), Windows and Linux come from a tag via `tauri-action`; installed apps update themselves from GitHub Releases after asking; installers stay under 15 MB; the Arabic is screenshot-tested in the engines of all three webviews; the landing page deploys to GitHub Pages with a preview per pull request; the app has credits and a "Report a problem" link. 1.0 waits for the [content review](docs/content-review.md) by people with Arabic and Quran knowledge.
+>
+> The desktop app scrolls continuously through the whole Quran (virtualized, with juz, hizb, page and sajda markers), jumps with ⌘K (`2:255`, `baqara 255`, `بقرة`, `Ayat al-Kursi`, `juz 30`, `page 604`), searches the Arabic text and the translations with ⌘F (tashkeel and letter variants ignored; `"phrases"`, `-exclusions`, `surah:2`, `juz:30`), shows a translation below or beside the Arabic (T toggles it; Pickthall's English is bundled; any other, e.g. from Tanzil, can be [imported](docs/translation-import.md)), compares all installed translations of a verse with C, and has local study tools: highlights in six colours (1–6), notes (N), bookmarks (B), copy with reference (⌘C), a khatm reading plan, and export / import as Markdown and JSON (S opens the study panel). Study data and the last position live in one SQLite file in the app data folder. `cargo quran read kursi` prints a verse, `cargo quran search رحمن juz:30` searches.
 
 ## Goals
 
@@ -20,7 +22,8 @@ Inspired by [bible-rs](https://github.com/michaelshimeles/bible-rs).
 apps/
   desktop/          Tauri 2 app: React + Vite + Tailwind
     src-tauri/      Tauri shell, commands call into quran-core
-  web/              Landing page (Astro): /, /download, /privacy
+    e2e/            Screenshot tests of the Arabic (Playwright)
+  web/              Landing page (Astro): /, /download, /privacy — on GitHub Pages
 packages/
   ui/               Shared React components + theme (Ayah, SurahHeader)
   types/            Shared TS types (Surah, Ayah, VerseRef, Highlight)
@@ -30,6 +33,7 @@ crates/
   xtask/            Reproducible data build from pinned sources
 data/               Generated data files (freely licensed only): quran.bin, translations/
 LICENSES/           License and provenance per data source and font
+docs/               Translation import, releases, content review
 ```
 
 Two workspaces in one repo: pnpm + Turborepo for JS/TS, Cargo for Rust.
@@ -64,7 +68,15 @@ cargo xtask verify   # counts, Basmala rules, text digest, byte-for-byte rebuild
 cargo bench -p quran-core
 ```
 
-Release bundle of the desktop app: `pnpm --filter @quran-reader/desktop tauri:build`.
+Arabic rendering tests (Playwright; the engine of your OS's webview, see DECISIONS.md D-028):
+
+```bash
+pnpm --filter @quran-reader/desktop exec playwright install webkit   # once (Windows uses Edge)
+pnpm --filter @quran-reader/desktop test:e2e
+UPDATE_FIXTURE=1 cargo test -p quran-core --test fixture   # after a data change
+```
+
+Release bundle of the desktop app: `pnpm --filter @quran-reader/desktop tauri:build`. Releases, signing, the updater key and GitHub Pages: [docs/release.md](docs/release.md).
 
 ## Licensing
 
