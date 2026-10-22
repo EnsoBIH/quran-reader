@@ -81,7 +81,7 @@ jobs:
       - run: pnpm --filter @quran-reader/desktop test:e2e
         env:
           # Set to `missing` or `all` (repository variable) to write new baselines.
-          E2E_UPDATE_SNAPSHOTS: missing # TEMPORARY: first baselines, reverted in the next commit
+          E2E_UPDATE_SNAPSHOTS: ${{ vars.E2E_UPDATE_SNAPSHOTS }}
       - if: always()
         uses: actions/upload-artifact@v4
         with:
