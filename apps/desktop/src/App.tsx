@@ -20,6 +20,7 @@ import { Compare } from "./Compare.tsx";
 import { Credits } from "./Credits.tsx";
 import * as core from "./core.ts";
 import { canStep, EMPTY_HISTORY, type History, migratePosition, step, visit } from "./history.ts";
+import { problemUrl } from "./links.ts";
 import { buildMushaf, indexOf, type Mushaf, refAt, refOfRow, rowOf } from "./mushaf.ts";
 import { NoteEditor } from "./NoteEditor.tsx";
 import { Palette } from "./Palette.tsx";
@@ -45,6 +46,8 @@ import {
   writeClipboard,
 } from "./study.ts";
 import { useLibrary } from "./translations.ts";
+import { UpdateBanner } from "./UpdateBanner.tsx";
+import { useUpdates } from "./updates.ts";
 
 export interface Loaded {
   mushaf: Mushaf | null;
@@ -182,6 +185,7 @@ function ReaderApp({
   const [found, setFound] = useState<{ hit: SearchHit } | null>(null);
   const [compare, setCompare] = useState(false);
   const [credits, setCredits] = useState(false);
+  const updates = useUpdates(settings.checkUpdates);
   const reader = useRef<ReaderHandle>(null);
 
   // Texts load when something shows them: the reader, compare (C) and search (⌘F).
@@ -269,6 +273,24 @@ function ReaderApp({
     const id = setTimeout(() => setToast(null), 2200);
     return () => clearTimeout(id);
   }, [toast]);
+
+  const openLink = (url: string) => {
+    core.openLink(url).catch((e: unknown) => notify(String(e)));
+  };
+  /** Opens the GitHub issue form, filled in with the verse being looked at and the setup. */
+  const reportProblem = () => {
+    const ref = refAt(mushaf, target());
+    openLink(
+      problemUrl({
+        version: info?.version ?? null,
+        verse: `${ref.surah}:${ref.ayah}`,
+        translation: shown?.name ?? null,
+        view: settings.view,
+        theme: settings.theme,
+        userAgent: navigator.userAgent,
+      }),
+    );
+  };
 
   /** The verse 1–6, N, B and ⌘C act on: the selected one while it is in view, else the one being read. */
   const target = () => {
@@ -463,6 +485,8 @@ function ReaderApp({
               onChange={setSettings}
               library={library}
               shown={shown}
+              updates={updates}
+              version={info?.version ?? null}
               onClose={() => setPanel(false)}
             />
           )
@@ -512,7 +536,13 @@ function ReaderApp({
           />
         )}
       </div>
-      <Footer info={info} error={null} onCredits={() => setCredits(true)} />
+      <Footer
+        info={info}
+        error={null}
+        onCredits={() => setCredits(true)}
+        onReport={reportProblem}
+      />
+      <UpdateBanner updates={updates} onLink={openLink} />
       {palette && <Palette mushaf={mushaf} onGo={onHit} onClose={() => setPalette(false)} />}
       {noteFor !== null && (
         <NoteEditor
@@ -574,6 +604,8 @@ function ReaderApp({
         <Credits
           info={info}
           translations={library.installed}
+          onLink={openLink}
+          onReport={reportProblem}
           onClose={() => {
             setCredits(false);
             reader.current?.focus();
@@ -789,10 +821,12 @@ function Footer({
   info,
   error,
   onCredits,
+  onReport,
 }: {
   info: CoreInfo | null;
   error: string | null;
   onCredits?: () => void;
+  onReport?: () => void;
 }) {
   return (
     <footer className="flex shrink-0 justify-between gap-4 border-t border-rule px-5 py-2 text-muted text-xs tabular-nums">
@@ -810,6 +844,14 @@ function Footer({
             {" · "}
             <button type="button" onClick={onCredits} className="hover:text-ink">
               Credits
+            </button>
+          </>
+        )}
+        {onReport && (
+          <>
+            {" · "}
+            <button type="button" onClick={onReport} className="hover:text-ink">
+              Report a problem
             </button>
           </>
         )}

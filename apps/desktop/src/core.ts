@@ -132,6 +132,37 @@ export async function applyImport(contents: string, mode: ImportMode) {
   return invoke<StudyData>("apply_import", { contents, mode });
 }
 
+/** A newer version on GitHub Releases. */
+export interface UpdateInfo {
+  version: string;
+  currentVersion: string;
+  /** Release notes, if the release has any. */
+  notes: string | null;
+}
+
+/**
+ * Asks GitHub Releases for a newer version; null when this one is current. Rejects in
+ * development builds and when offline.
+ */
+export async function checkUpdate(): Promise<UpdateInfo | null> {
+  if (!isTauri()) return null;
+  return invoke<UpdateInfo | null>("check_update");
+}
+
+/** Downloads, verifies and installs the update found by {@link checkUpdate}, then restarts. */
+export async function installUpdate(): Promise<void> {
+  return invoke("install_update");
+}
+
+/** Opens a project or credits link in the browser (the app refuses any other URL). */
+export async function openLink(url: string): Promise<void> {
+  if (!isTauri()) {
+    window.open(url, "_blank", "noopener");
+    return;
+  }
+  return invoke("open_link", { url });
+}
+
 /** Reports that text is on screen; resolves to milliseconds since the app started. */
 export async function textVisible(): Promise<number | null> {
   if (!isTauri()) return null;
