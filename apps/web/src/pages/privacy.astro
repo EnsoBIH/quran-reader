@@ -8,11 +8,17 @@ import Base from "../layouts/Base.astro";
     <p>Quran Reader has no accounts, no analytics and no tracking.</p>
     <p>
       Highlights, notes, bookmarks and reading position are stored in a local SQLite file on your device.
-      They never leave it unless you export them yourself.
+      They never leave it unless you export them yourself. Translations you import stay on your device too.
     </p>
     <p>
-      The app only goes online to check GitHub Releases for updates and, if you choose to, to download
-      optional translations.
+      The app goes online for one thing: when it starts, it asks GitHub Releases whether a newer version
+      exists, and downloads it only if you choose to install it. GitHub sees that request like any
+      download (your IP address, the app's version). You can turn the check off in the settings.
+    </p>
+    <p>
+      “Report a problem” and the links in the credits open in your browser. A problem report is a
+      form on GitHub with the verse and the app version filled in; nothing is sent until you submit
+      it there.
     </p>
   </div>
 </Base>

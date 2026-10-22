@@ -1,4 +1,5 @@
 ---
+import { href, ISSUE_URL, REPO_URL } from "../lib/links.ts";
 import "../styles/global.css";
 
 interface Props {
@@ -18,17 +19,17 @@ const {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href={href("favicon.svg")} />
     <title>{title}</title>
   </head>
   <body class="bg-paper text-ink antialiased">
     <div class="mx-auto flex min-h-screen max-w-3xl flex-col px-4 sm:px-6">
       <header class="flex items-center justify-between py-6 text-sm">
-        <a href="/" class="font-medium">Quran Reader</a>
+        <a href={href()} class="font-medium">Quran Reader</a>
         <nav class="flex gap-5 text-muted">
-          <a href="/download" class="hover:text-ink">Download</a>
-          <a href="/privacy" class="hover:text-ink">Privacy</a>
-          <a href="https://github.com/EnsoBIH/quran-reader" class="hover:text-ink">GitHub</a>
+          <a href={href("download")} class="hover:text-ink">Download</a>
+          <a href={href("privacy")} class="hover:text-ink">Privacy</a>
+          <a href={REPO_URL} class="hover:text-ink">GitHub</a>
         </nav>
       </header>
       <main class="flex-1 py-10">
@@ -37,6 +38,7 @@ const {
       <footer class="border-t border-rule py-6 text-muted text-xs">
         Code under MIT. Quran text from
         <a href="https://tanzil.net" class="underline">Tanzil.net</a>, shown unmodified. Font: Amiri Quran (SIL OFL).
+        Spotted a mistake? <a href={ISSUE_URL} class="underline">Report a problem</a>.
       </footer>
     </div>
   </body>
