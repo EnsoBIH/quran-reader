@@ -242,7 +242,7 @@ Why separate:
 
 What goes in: the Rust binary with the embedded data (`quran.bin` 1.3 MB, Pickthall 0.85 MB), SQLite (+1.7 MB, D-021), the updater (HTTP client with rustls and the `ring` crypto, minisign verification) and the frontend (0.46 MB: JS, CSS and the Amiri Quran subsets as woff2 and woff; Tauri compresses embedded assets with Brotli). The universal macOS binary holds two architectures, so it is the largest; the `.dmg` is compressed. The release profile already uses LTO, one codegen unit and `strip` (root `Cargo.toml`).
 
-**Consequences.** The first CI release build gives the real numbers; a regression shows up as a red pull request check before it reaches a release.
+**Consequences.** Measured on the unsigned CI build of 1.0.0 (pull request #15): `.dmg` (universal) 10.8 MB, NSIS `-setup.exe` 4.5 MB, `.msi` 6.2 MB, `.deb` 6.4 MB, `.rpm` 6.4 MB; AppImage 84.6 MB, `.app.tar.gz` 11.1 MB. The universal `.dmg` has the least headroom (4.2 MB). A regression shows up as a red pull request check before it reaches a release.
 
 ## D-027 · Auto-updater via GitHub Releases (2026-10-22)
 
